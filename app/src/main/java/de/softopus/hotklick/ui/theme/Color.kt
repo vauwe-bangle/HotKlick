@@ -1,5 +1,5 @@
 // ui/theme/Color.kt
-package de.softopus.drawpoint.ui.theme
+package de.softopus.hotklick.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

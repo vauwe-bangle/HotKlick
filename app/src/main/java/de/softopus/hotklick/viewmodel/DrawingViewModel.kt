@@ -1,13 +1,13 @@
 // viewmodel/DrawingViewModel.kt
-package de.softopus.drawpoint.viewmodel
+package de.softopus.hotklick.viewmodel
 
 import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import de.softopus.drawpoint.data.DrawPoint
-import de.softopus.drawpoint.data.PointDatabase
-import de.softopus.drawpoint.repository.PointRepository
+import de.softopus.hotklick.data.DrawPoint
+import de.softopus.hotklick.data.PointDatabase
+import de.softopus.hotklick.repository.PointRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

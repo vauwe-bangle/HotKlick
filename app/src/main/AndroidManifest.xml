@@ -2,7 +2,7 @@
 <!-- AndroidManifest.xml -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="de.softopus.drawpoint">
+    package="de.softopus.hotklick">
 
     <!-- Permissions für Galerie-Zugriff -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />

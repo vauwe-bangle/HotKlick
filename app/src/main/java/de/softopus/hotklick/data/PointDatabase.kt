@@ -1,5 +1,5 @@
 // data/PointDatabase.kt
-package de.softopus.drawpoint.data
+package de.softopus.hotklick.data
 
 import android.content.Context
 import androidx.room.Database
@@ -8,7 +8,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [PointEntity::class],
-    version = 2, // Version für Text-Spalte erhöht
+    version = 3, // NEU: Version von 2 auf 3 erhöht für audioUri-Feld
     exportSchema = false
 )
 abstract class PointDatabase : RoomDatabase() {
@@ -23,7 +23,7 @@ abstract class PointDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     PointDatabase::class.java,
-                    "point_database_v5" // Neue DB für Text-Feature
+                    "point_database_v6" // NEU: DB-Name aktualisiert für Audio-Feature
                 )
                     .fallbackToDestructiveMigration() // Bei Problemen alles löschen
                     .build()

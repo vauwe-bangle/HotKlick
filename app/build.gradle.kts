@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "de.softopus.drawpoint"
+    namespace = "de.softopus.hotklick"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "de.softopus.drawpoint"
+        applicationId = "de.softopus.hotklick"
         minSdk = 24
         targetSdk = 35
         versionCode = 1

@@ -1,5 +1,5 @@
 // data/PointDao.kt
-package de.softopus.drawpoint.data
+package de.softopus.hotklick.data
 
 import androidx.room.Dao
 import androidx.room.Insert

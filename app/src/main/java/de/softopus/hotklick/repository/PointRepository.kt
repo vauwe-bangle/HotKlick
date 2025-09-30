@@ -1,9 +1,9 @@
 // repository/PointRepository.kt
-package de.softopus.drawpoint.repository
+package de.softopus.hotklick.repository
 
-import de.softopus.drawpoint.data.DrawPoint
-import de.softopus.drawpoint.data.PointDao
-import de.softopus.drawpoint.data.PointEntity
+import de.softopus.hotklick.data.DrawPoint
+import de.softopus.hotklick.data.PointDao
+import de.softopus.hotklick.data.PointEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -19,7 +19,8 @@ class PointRepository(private val pointDao: PointDao) {
                     y = entity.y,
                     radius = entity.radius,
                     imageUri = entity.imageUri,
-                    text = entity.text
+                    text = entity.text,
+                    audioUri = entity.audioUri // NEU: audioUri-Mapping hinzugefügt
                 )
             }
         }
@@ -34,7 +35,8 @@ class PointRepository(private val pointDao: PointDao) {
                 y = entity.y,
                 radius = entity.radius,
                 imageUri = entity.imageUri,
-                text = entity.text
+                text = entity.text,
+                audioUri = entity.audioUri // NEU: audioUri-Mapping hinzugefügt
             )
         }
     }
@@ -46,7 +48,8 @@ class PointRepository(private val pointDao: PointDao) {
             y = point.y,
             radius = point.radius,
             imageUri = point.imageUri,
-            text = point.text
+            text = point.text,
+            audioUri = point.audioUri // NEU: audioUri-Mapping hinzugefügt
         )
         pointDao.insertPoint(entity)
     }

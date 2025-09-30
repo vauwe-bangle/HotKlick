@@ -1,5 +1,5 @@
 // DrawingScreen.kt
-package de.softopus.drawpoint
+package de.softopus.hotklick
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -34,10 +34,11 @@ import androidx.compose.ui.text.withStyle
 import java.util.regex.Pattern
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import de.softopus.drawpoint.data.DrawPoint
-import de.softopus.drawpoint.viewmodel.DrawingViewModel
+import de.softopus.hotklick.data.DrawPoint
 
+import de.softopus.hotklick.viewmodel.DrawingViewModel
 
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
 
@@ -47,7 +48,8 @@ import androidx.compose.ui.text.font.FontWeight
 @Composable
 fun DrawingScreen(
     viewModel: DrawingViewModel = viewModel()
-) {
+)
+{
     val points by viewModel.points.collectAsState()
     val message by viewModel.message.collectAsState()
     val backgroundImageUri by viewModel.backgroundImageUri.collectAsState()
@@ -64,16 +66,18 @@ fun DrawingScreen(
     // Image Picker Launcher für Editiermodus
     val editImagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
+    ) { uri: Uri? ->  // Typ explizit angegeben
         viewModel.setBackgroundImage(uri)
     }
+
 
     // Image Picker Launcher für Übungsmodus
     val practiceImagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
+    ) { uri: Uri? ->  // Typ explizit angegeben
         viewModel.setBackgroundImage(uri)
     }
+
 
     // Konvertierung der gewünschten Pixel-Größe in dp
     val canvasWidthDp = 800.dp

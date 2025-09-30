@@ -1,5 +1,5 @@
 // ui/theme/Type.kt
-package de.softopus.drawpoint.ui.theme
+package de.softopus.hotklick.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

@@ -1,5 +1,5 @@
 // data/PointEntity.kt
-package de.softopus.drawpoint.data
+package de.softopus.hotklick.data
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
@@ -13,7 +13,8 @@ data class PointEntity(
     val y: Float,
     val radius: Float,
     val imageUri: String? = null,
-    val text: String? = null // Text für Hotspot
+    val text: String? = null,
+    val audioUri: String? = null // NEU: Audio-Feld hinzugefügt
 )
 
 data class DrawPoint(
@@ -23,5 +24,6 @@ data class DrawPoint(
     val y: Float,
     val radius: Float = 50f,
     val imageUri: String? = null,
-    val text: String? = null // Text für Hotspot
+    val text: String? = null,
+    val audioUri: String? = null // NEU: Audio-Feld hinzugefügt
 )

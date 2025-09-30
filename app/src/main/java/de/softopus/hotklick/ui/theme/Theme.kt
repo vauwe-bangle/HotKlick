@@ -1,5 +1,5 @@
 // ui/theme/Theme.kt
-package de.softopus.drawpoint.ui.theme
+package de.softopus.hotklick.ui.theme
 
 import android.app.Activity
 import android.os.Build

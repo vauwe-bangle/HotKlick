@@ -1,5 +1,4 @@
-package de.softopus.drawpoint
-
+package de.softopus.hotklick
 import org.junit.Test
 
 import org.junit.Assert.*
