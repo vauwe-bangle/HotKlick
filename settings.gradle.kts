@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "DrawPoint"
+rootProject.name = "HotKlick"
 include(":app")
