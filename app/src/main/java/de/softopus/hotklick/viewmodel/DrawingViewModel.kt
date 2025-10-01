@@ -40,6 +40,23 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
     private val _textInput = MutableStateFlow("")
     val textInput: StateFlow<String> = _textInput.asStateFlow()
 
+    // Audio-Dialog State
+    private val _showAudioDialog = MutableStateFlow(false)
+    val showAudioDialog: StateFlow<Boolean> = _showAudioDialog.asStateFlow()
+
+    private val _selectedPointForAudio = MutableStateFlow<DrawPoint?>(null)
+    val selectedPointForAudio: StateFlow<DrawPoint?> = _selectedPointForAudio.asStateFlow()
+
+    // Audio-Recorder State
+    private val _showRecorderDialog = MutableStateFlow(false)
+    val showRecorderDialog: StateFlow<Boolean> = _showRecorderDialog.asStateFlow()
+
+    private val _isRecording = MutableStateFlow(false)
+    val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
+
+    private val _recordingDuration = MutableStateFlow(0)
+    val recordingDuration: StateFlow<Int> = _recordingDuration.asStateFlow()
+
     // Modus-Verwaltung (Edit/Practice)
     private val _isEditMode = MutableStateFlow(true)
     val isEditMode: StateFlow<Boolean> = _isEditMode.asStateFlow()
@@ -50,6 +67,13 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
 
     private val _selectedHotspotName = MutableStateFlow("")
     val selectedHotspotName: StateFlow<String> = _selectedHotspotName.asStateFlow()
+
+    // Übungsmodus - Audio-Wiedergabe
+    private val _isPlayingAudio = MutableStateFlow(false)
+    val isPlayingAudio: StateFlow<Boolean> = _isPlayingAudio.asStateFlow()
+
+    private val _currentAudioUri = MutableStateFlow<String?>(null)
+    val currentAudioUri: StateFlow<String?> = _currentAudioUri.asStateFlow()
 
     // Bildspezifische Radius-Speicherung
     private val imageRadiusMap = mutableMapOf<String?, Float>()
@@ -68,13 +92,14 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
         val pointName = "P${currentPoints.size + 1}"
 
         val newPoint = DrawPoint(
-            id = 0, // Temporäre ID für Array
+            id = 0,
             name = pointName,
             x = x,
             y = y,
             radius = _pointRadius.value,
             imageUri = _backgroundImageUri.value?.toString(),
-            text = null // Noch kein Text zugeordnet
+            text = null,
+            audioUri = null
         )
 
         currentPoints.add(newPoint)
@@ -93,12 +118,10 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
     fun deletePoint(pointId: Int, pointName: String) {
         val currentPoints = _currentSessionPoints.value.toMutableList()
 
-        // Punkt aus Array entfernen (nach Name suchen, da ID = 0)
         val pointToRemove = currentPoints.find { it.name == pointName }
         if (pointToRemove != null) {
             currentPoints.remove(pointToRemove)
 
-            // Array neu nummerieren: P1, P2, P3...
             val renumberedPoints = currentPoints.mapIndexed { index, point ->
                 point.copy(name = "P${index + 1}")
             }
@@ -118,7 +141,6 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
 
     fun setBackgroundImage(uri: Uri?) {
         viewModelScope.launch {
-            // Aktuellen Radius für das bisherige Bild speichern
             val previousImageUri = _backgroundImageUri.value?.toString()
             imageRadiusMap[previousImageUri] = _pointRadius.value
 
@@ -126,27 +148,22 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             val newImageUri = uri?.toString()
 
             if (uri != null) {
-                // Neues Bild geladen - prüfen ob gespeicherte Punkte existieren
                 val savedPoints = repository.getPointsForImageSync(newImageUri)
 
                 if (savedPoints.isNotEmpty()) {
-                    // Gespeicherte Punkte ins Array laden
                     _currentSessionPoints.value = savedPoints
                     _message.value = "Bild geladen - ${savedPoints.size} gespeicherte Punkte wiederhergestellt"
                     println("DEBUG: Bild $newImageUri geladen - ${savedPoints.size} Punkte aus DB ins Array geladen")
                 } else {
-                    // Neues Bild ohne gespeicherte Punkte
                     _currentSessionPoints.value = emptyList()
                     _message.value = "Neues Bild geladen - Array ist leer"
                     println("DEBUG: Neues Bild $newImageUri geladen - Array geleert")
                 }
 
-                // Bildspezifischen Radius wiederherstellen
                 val savedRadius = imageRadiusMap[newImageUri] ?: 50f
                 _pointRadius.value = savedRadius
 
             } else {
-                // Kein Bild - Array leeren
                 _currentSessionPoints.value = emptyList()
                 _message.value = "Kein Bild - Array geleert"
                 println("DEBUG: Kein Bild - Array geleert")
@@ -164,10 +181,8 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
 
             if (currentImageUri != null && currentPoints.isNotEmpty()) {
                 try {
-                    // 1. Alte Punkte für dieses Bild löschen
                     repository.deleteAllPointsForImage(currentImageUri)
 
-                    // 2. Array-Punkte in Datenbank speichern
                     currentPoints.forEach { point ->
                         repository.insertPoint(point.copy(imageUri = currentImageUri))
                     }
@@ -184,10 +199,8 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
                 println("DEBUG: Keine Daten zum Speichern - Bild: $currentImageUri, Punkte: ${currentPoints.size}")
             }
 
-            // 3. Radius für dieses Bild speichern
             imageRadiusMap[currentImageUri] = _pointRadius.value
 
-            // 4. Array leeren und Bild entfernen
             _currentSessionPoints.value = emptyList()
             _backgroundImageUri.value = null
 
@@ -204,7 +217,6 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             val newRadius = currentRadius + 20f
             _pointRadius.value = newRadius
 
-            // Radius für aktuelles Bild speichern
             val currentImageUri = _backgroundImageUri.value?.toString()
             imageRadiusMap[currentImageUri] = newRadius
 
@@ -218,7 +230,6 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             val newRadius = currentRadius - 20f
             _pointRadius.value = newRadius
 
-            // Radius für aktuelles Bild speichern
             val currentImageUri = _backgroundImageUri.value?.toString()
             imageRadiusMap[currentImageUri] = newRadius
 
@@ -229,7 +240,7 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
     // Text-Dialog-Funktionen
     fun openTextDialog(point: DrawPoint) {
         _selectedPointForText.value = point
-        _textInput.value = point.text ?: "" // Bestehenden Text laden oder leer
+        _textInput.value = point.text ?: ""
         _showTextDialog.value = true
         println("DEBUG: Text-Dialog für Punkt ${point.name} geöffnet - Aktueller Text: '${point.text}'")
     }
@@ -254,7 +265,6 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             val pointIndex = currentPoints.indexOfFirst { it.name == selectedPoint.name }
 
             if (pointIndex != -1) {
-                // Punkt im Array mit Text aktualisieren
                 val updatedPoint = currentPoints[pointIndex].copy(
                     text = if (inputText.isNotEmpty()) inputText else null
                 )
@@ -274,15 +284,113 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
         closeTextDialog()
     }
 
-    // Modus-Umschaltung (Long-Click erforderlich für Edit-Modus)
+    // Audio-Dialog-Funktionen
+    fun openAudioDialog(point: DrawPoint) {
+        _selectedPointForAudio.value = point
+        _showAudioDialog.value = true
+        println("DEBUG: Audio-Dialog für Punkt ${point.name} geöffnet - Aktuelles Audio: '${point.audioUri}'")
+    }
+
+    fun closeAudioDialog() {
+        _showAudioDialog.value = false
+        _selectedPointForAudio.value = null
+        println("DEBUG: Audio-Dialog geschlossen")
+    }
+
+    fun saveAudioToPoint(audioUri: String) {
+        val selectedPoint = _selectedPointForAudio.value
+
+        if (selectedPoint != null) {
+            val currentPoints = _currentSessionPoints.value.toMutableList()
+            val pointIndex = currentPoints.indexOfFirst { it.name == selectedPoint.name }
+
+            if (pointIndex != -1) {
+                val updatedPoint = currentPoints[pointIndex].copy(
+                    audioUri = audioUri
+                )
+                currentPoints[pointIndex] = updatedPoint
+                _currentSessionPoints.value = currentPoints
+
+                println("DEBUG: Audio für Punkt ${selectedPoint.name} gespeichert: '$audioUri'")
+                _message.value = "Audio für ${selectedPoint.name} zugeordnet"
+
+                viewModelScope.launch {
+                    kotlinx.coroutines.delay(2000)
+                    _message.value = ""
+                }
+            }
+        }
+
+        closeAudioDialog()
+    }
+
+    fun removeAudioFromPoint() {
+        val selectedPoint = _selectedPointForAudio.value
+
+        if (selectedPoint != null) {
+            val currentPoints = _currentSessionPoints.value.toMutableList()
+            val pointIndex = currentPoints.indexOfFirst { it.name == selectedPoint.name }
+
+            if (pointIndex != -1) {
+                val updatedPoint = currentPoints[pointIndex].copy(
+                    audioUri = null
+                )
+                currentPoints[pointIndex] = updatedPoint
+                _currentSessionPoints.value = currentPoints
+
+                println("DEBUG: Audio für Punkt ${selectedPoint.name} entfernt")
+                _message.value = "Audio für ${selectedPoint.name} entfernt"
+
+                viewModelScope.launch {
+                    kotlinx.coroutines.delay(2000)
+                    _message.value = ""
+                }
+            }
+        }
+
+        closeAudioDialog()
+    }
+
+    // Audio-Recorder Funktionen
+    fun openRecorderDialog() {
+        _showAudioDialog.value = false  // Audio-Dialog schließen
+        _showRecorderDialog.value = true
+        println("DEBUG: Recorder-Dialog geöffnet")
+    }
+
+    fun closeRecorderDialog() {
+        _showRecorderDialog.value = false
+        _isRecording.value = false
+        _recordingDuration.value = 0
+        println("DEBUG: Recorder-Dialog geschlossen")
+    }
+
+    fun startRecording() {
+        _isRecording.value = true
+        _recordingDuration.value = 0
+        println("DEBUG: Aufnahme gestartet")
+    }
+
+    fun stopRecording() {
+        _isRecording.value = false
+        println("DEBUG: Aufnahme gestoppt - Dauer: ${_recordingDuration.value}s")
+    }
+
+    fun updateRecordingDuration(seconds: Int) {
+        _recordingDuration.value = seconds
+    }
+
+    // Modus-Umschaltung
     fun toggleToEditMode() {
         if (!_isEditMode.value) {
             _isEditMode.value = true
 
-            // Bei Umschaltung zu Edit alle Dialog-States zurücksetzen
             closeTextDialog()
+            closeAudioDialog()
+            closeRecorderDialog()
             _selectedHotspotText.value = ""
             _selectedHotspotName.value = ""
+            stopAudio()
 
             _message.value = "Editiermodus aktiviert - Long-Click erkannt"
 
@@ -299,8 +407,9 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
         if (_isEditMode.value) {
             _isEditMode.value = false
 
-            // Bei Umschaltung zu Practice alle Dialog-States zurücksetzen
             closeTextDialog()
+            closeAudioDialog()
+            closeRecorderDialog()
             _selectedHotspotText.value = ""
             _selectedHotspotName.value = ""
 
@@ -330,9 +439,22 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // Hotspot-Text löschen
+    // Übungsmodus - Audio abspielen
+    fun playAudio(audioUri: String) {
+        _currentAudioUri.value = audioUri
+        _isPlayingAudio.value = true
+        println("DEBUG: Audio-Wiedergabe gestartet: $audioUri")
+    }
+
+    fun stopAudio() {
+        _isPlayingAudio.value = false
+        _currentAudioUri.value = null
+        println("DEBUG: Audio-Wiedergabe gestoppt")
+    }
+
     fun clearHotspotText() {
         _selectedHotspotText.value = ""
         _selectedHotspotName.value = ""
+        stopAudio()
     }
 }

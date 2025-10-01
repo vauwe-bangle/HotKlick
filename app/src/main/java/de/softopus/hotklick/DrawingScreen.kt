@@ -1,6 +1,10 @@
 // DrawingScreen.kt
 package de.softopus.hotklick
 
+import android.graphics.Paint
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
+import android.net.Uri as AndroidUri// DrawingScreen.kt
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -8,6 +12,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -18,38 +23,49 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.foundation.text.ClickableText
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
-import java.util.regex.Pattern
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import de.softopus.hotklick.data.DrawPoint
-
 import de.softopus.hotklick.viewmodel.DrawingViewModel
+import java.util.regex.Pattern
+import kotlin.math.sqrt
 
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.font.FontWeight
-
+import android.media.MediaPlayer
+import android.media.MediaRecorder
+import android.os.Build
+import android.os.Environment
+import androidx.compose.runtime.DisposableEffect
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import android.content.ContentValues
+import android.provider.MediaStore
 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DrawingScreen(
     viewModel: DrawingViewModel = viewModel()
-)
-{
+) {
     val points by viewModel.points.collectAsState()
     val message by viewModel.message.collectAsState()
     val backgroundImageUri by viewModel.backgroundImageUri.collectAsState()
@@ -57,31 +73,70 @@ fun DrawingScreen(
     val showTextDialog by viewModel.showTextDialog.collectAsState()
     val selectedPointForText by viewModel.selectedPointForText.collectAsState()
     val textInput by viewModel.textInput.collectAsState()
+    val showAudioDialog by viewModel.showAudioDialog.collectAsState()
+    val selectedPointForAudio by viewModel.selectedPointForAudio.collectAsState()
+    val showRecorderDialog by viewModel.showRecorderDialog.collectAsState()
+    val isRecording by viewModel.isRecording.collectAsState()
+    val recordingDuration by viewModel.recordingDuration.collectAsState()
     val isEditMode by viewModel.isEditMode.collectAsState()
     val selectedHotspotText by viewModel.selectedHotspotText.collectAsState()
     val selectedHotspotName by viewModel.selectedHotspotName.collectAsState()
     val density = LocalDensity.current
+    val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
+    val coroutineScope = rememberCoroutineScope()
+
+    // MediaPlayer für Audio-Wiedergabe
+    var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var isPlaying by remember { mutableStateOf(false) }
+
+// MediaRecorder für Audio-Aufnahme
+    var mediaRecorder: MediaRecorder? by remember { mutableStateOf(null) }
+    var recordingFile: File? by remember { mutableStateOf(null) }
+
+    // MediaPlayer und MediaRecorder aufräumen
+    DisposableEffect(Unit) {
+        onDispose {
+            mediaPlayer?.release()
+            mediaPlayer = null
+            mediaRecorder?.apply {
+                try {
+                    stop()
+                } catch (e: Exception) { }
+                release()
+            }
+            mediaRecorder = null
+        }
+    }
 
     // Image Picker Launcher für Editiermodus
     val editImagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->  // Typ explizit angegeben
+    ) { uri: Uri? ->
         viewModel.setBackgroundImage(uri)
     }
-
 
     // Image Picker Launcher für Übungsmodus
     val practiceImagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->  // Typ explizit angegeben
+    ) { uri: Uri? ->
         viewModel.setBackgroundImage(uri)
     }
 
+    // Audio File Picker
+    val audioPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            viewModel.saveAudioToPoint(it.toString())
+        }
+    }
 
     // Konvertierung der gewünschten Pixel-Größe in dp
     val canvasWidthDp = 800.dp
     val canvasHeightDp = 600.dp
+
+
 
     Column(
         modifier = Modifier
@@ -89,7 +144,7 @@ fun DrawingScreen(
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Zeichenbereich mit Hintergrundbild (stabile Position)
+        // Zeichenbereich mit Hintergrundbild
         Card(
             modifier = Modifier.size(canvasWidthDp, canvasHeightDp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -113,36 +168,71 @@ fun DrawingScreen(
                         .pointerInput(points, pointRadius, isEditMode) {
                             detectTapGestures(
                                 onTap = { offset: Offset ->
-                                    // Hit-Detection für Punkte mit individuellen Radien
+                                    // Hit-Detection für Punkte
                                     val hitPoint = points.find { point ->
-                                        val distance = kotlin.math.sqrt(
+                                        val distance = sqrt(
                                             (offset.x - point.x) * (offset.x - point.x) +
                                                     (offset.y - point.y) * (offset.y - point.y)
                                         )
                                         distance <= point.radius
                                     }
 
-                                    if (hitPoint != null) {
-                                        if (isEditMode) {
-                                            // Editiermodus: Punkt löschen
+                                    if (isEditMode) {
+                                        // Single-Tap: Punkt löschen
+                                        if (hitPoint != null) {
                                             viewModel.deletePoint(hitPoint.id, hitPoint.name)
-                                        } else {
-                                            // Übungsmodus: Text anzeigen (nur wenn Text vorhanden)
-                                            if (hitPoint.text != null && hitPoint.text.isNotEmpty()) {
-                                                viewModel.showHotspotText(hitPoint)
-                                            }
                                         }
                                     } else {
-                                        // Übungsmodus: Klick auf leeren Bereich schließt Textbox
-                                        if (!isEditMode) {
+                                        // Übungsmodus
+                                        if (hitPoint != null) {
+                                            if (hitPoint.text != null && hitPoint.text.isNotEmpty()) {
+                                                viewModel.showHotspotText(hitPoint)
+
+                                                // Audio stoppen bei Single-Click
+                                                mediaPlayer?.apply {
+                                                    if (isPlaying()) {
+                                                        stop()
+                                                        reset()
+                                                    }
+                                                    release()
+                                                }
+                                                mediaPlayer = null
+                                                isPlaying = false
+                                            }
+                                        } else {
                                             viewModel.clearHotspotText()
+
+                                            // Audio stoppen bei Klick außerhalb
+                                            mediaPlayer?.apply {
+                                                if (isPlaying()) {
+                                                    stop()
+                                                    reset()
+                                                }
+                                                release()
+                                            }
+                                            mediaPlayer = null
+                                            isPlaying = false
                                         }
                                     }
                                 },
                                 onLongPress = { offset: Offset ->
                                     if (isEditMode) {
-                                        // Editiermodus: Neue Punkte erstellen
-                                        viewModel.addPoint(offset.x, offset.y)
+                                        // Hit-Detection für Punkte
+                                        val hitPoint = points.find { point ->
+                                            val distance = sqrt(
+                                                (offset.x - point.x) * (offset.x - point.x) +
+                                                        (offset.y - point.y) * (offset.y - point.y)
+                                            )
+                                            distance <= point.radius
+                                        }
+
+                                        if (hitPoint != null) {
+                                            // Long-Press auf bestehendem Hotspot: Audio-Dialog öffnen
+                                            viewModel.openAudioDialog(hitPoint)
+                                        } else {
+                                            // Long-Press auf leerem Bereich: Neuen Punkt erstellen
+                                            viewModel.addPoint(offset.x, offset.y)
+                                        }
                                     } else {
                                         // Übungsmodus: Bild laden
                                         practiceImagePickerLauncher.launch("image/*")
@@ -150,9 +240,8 @@ fun DrawingScreen(
                                 },
                                 onDoubleTap = { offset: Offset ->
                                     if (isEditMode) {
-                                        // Nur im Editiermodus Text-Eingabe
                                         val hitPoint = points.find { point ->
-                                            val distance = kotlin.math.sqrt(
+                                            val distance = sqrt(
                                                 (offset.x - point.x) * (offset.x - point.x) +
                                                         (offset.y - point.y) * (offset.y - point.y)
                                             )
@@ -161,6 +250,52 @@ fun DrawingScreen(
 
                                         hitPoint?.let { point ->
                                             viewModel.openTextDialog(point)
+                                        }
+                                    } else {
+                                        // Übungsmodus: Double-Click spielt Audio ab
+                                        val hitPoint = points.find { point ->
+                                            val distance = sqrt(
+                                                (offset.x - point.x) * (offset.x - point.x) +
+                                                        (offset.y - point.y) * (offset.y - point.y)
+                                            )
+                                            distance <= point.radius
+                                        }
+
+                                        if (hitPoint != null && hitPoint.audioUri != null) {
+                                            // Text anzeigen
+                                            if (hitPoint.text != null && hitPoint.text.isNotEmpty()) {
+                                                viewModel.showHotspotText(hitPoint)
+                                            }
+
+                                            // Audio abspielen
+                                            try {
+                                                // Alten Player stoppen und aufräumen
+                                                mediaPlayer?.apply {
+                                                    if (isPlaying()) {
+                                                        stop()
+                                                    }
+                                                    reset()
+                                                    release()
+                                                }
+
+                                                // Neuen Player erstellen und Audio abspielen
+                                                mediaPlayer = MediaPlayer().apply {
+                                                    setDataSource(context, AndroidUri.parse(hitPoint.audioUri))
+                                                    prepare()
+                                                    start()
+                                                    isPlaying = true
+
+                                                    setOnCompletionListener {
+                                                        isPlaying = false
+                                                        release()
+                                                        mediaPlayer = null
+                                                    }
+                                                }
+
+                                                viewModel.playAudio(hitPoint.audioUri)
+                                            } catch (e: Exception) {
+                                                println("DEBUG: Fehler beim Audio abspielen: ${e.message}")
+                                            }
                                         }
                                     }
                                 }
@@ -174,7 +309,7 @@ fun DrawingScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Modus-Toggle Button mit Long-Click für Edit-Modus
+        // Modus-Toggle Button
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center
@@ -185,12 +320,10 @@ fun DrawingScreen(
                         detectTapGestures(
                             onTap = {
                                 if (isEditMode) {
-                                    // Einfacher Click: Edit → Practice
                                     viewModel.toggleToPracticeMode()
                                 }
                             },
                             onLongPress = { _: Offset ->
-                                // Long-Click: Umschaltung in beiden Richtungen
                                 if (isEditMode) {
                                     viewModel.toggleToPracticeMode()
                                 } else {
@@ -217,7 +350,7 @@ fun DrawingScreen(
         // Übungsmodus-Hinweise
         if (!isEditMode) {
             Text(
-                text = "Long-Click auf Canvas: Bild laden • Click auf Hotspot: Text anzeigen",
+                text = "Long-Click: Bild laden • 1x-Click: Text anzeigen • 2x-Click: Audio abspielen",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 modifier = Modifier.padding(horizontal = 16.dp)
@@ -225,7 +358,19 @@ fun DrawingScreen(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // Alle Buttons in einer Reihe (nur im Editiermodus)
+        // Editiermodus-Hinweise
+        if (isEditMode) {
+            Text(
+                text = "Long-Press leer: Hotspot erstellen • Long-Press Hotspot: Audio • 1x-Click: Löschen • 2x-Click: Text",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        // Buttons (nur im Editiermodus)
         if (isEditMode) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -254,7 +399,7 @@ fun DrawingScreen(
                     }
                 }
 
-                // Vergrößerter Radius Stepper
+                // Radius Stepper
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     modifier = Modifier.height(56.dp)
@@ -296,17 +441,17 @@ fun DrawingScreen(
             }
         }
 
-        // Status-Anzeige der Punkte
+        // Status-Anzeige
         if (points.isNotEmpty()) {
             Text(
-                text = "${points.size} Hotspots: ${points.count { it.text != null }} mit Text, ${points.count { it.text == null }} ohne Text",
+                text = "${points.size} Hotspots: ${points.count { it.text != null }} mit Text, ${points.count { it.audioUri != null }} mit Audio",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 modifier = Modifier.padding(top = 8.dp)
             )
         }
 
-        // Übungsmodus: Hotspot-Text Anzeige
+        // Übungsmodus: Text-Anzeige
         if (!isEditMode && selectedHotspotText.isNotEmpty()) {
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -320,7 +465,6 @@ fun DrawingScreen(
                 Column(
                     modifier = Modifier.padding(16.dp)
                 ) {
-                    // Text ohne Hotspot-Bezeichnung, größere Schrift
                     ClickableText(
                         text = buildAnnotatedString {
                             parseTextWithLinks(selectedHotspotText)
@@ -329,7 +473,6 @@ fun DrawingScreen(
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         ),
                         onClick = { offset: Int ->
-                            // Link-Clicks behandeln
                             val annotatedString = buildAnnotatedString {
                                 parseTextWithLinks(selectedHotspotText)
                             }
@@ -361,7 +504,7 @@ fun DrawingScreen(
         }
     }
 
-    // Text-Eingabe Dialog (nur im Editiermodus)
+    // Text-Dialog
     if (isEditMode && showTextDialog && selectedPointForText != null) {
         AlertDialog(
             onDismissRequest = { viewModel.closeTextDialog() },
@@ -409,9 +552,115 @@ fun DrawingScreen(
             }
         )
     }
+
+    // Audio-Dialog
+    if (isEditMode && showAudioDialog && selectedPointForAudio != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.closeAudioDialog() },
+            title = {
+                Text("Audio für ${selectedPointForAudio!!.name}")
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "Wählen Sie eine Option:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // Aktueller Audio-Status
+                    if (selectedPointForAudio!!.audioUri != null) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Audio zugeordnet",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "✓",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = "Noch kein Audio zugeordnet",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+
+                    Divider()
+
+                    // Option 1: Audio-Datei auswählen
+                    Button(
+                        onClick = {
+                            audioPickerLauncher.launch("audio/*")
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("📁 MP3-Datei laden")
+                    }
+
+                    // Option 2: Audio aufnehmen
+                    Button(
+                        onClick = {
+                            println("DEBUG: Audio aufnehmen Button geklickt")
+                            viewModel.openRecorderDialog()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondary
+                        )
+                    ) {
+                        Text("🎤 Audio aufnehmen")
+                    }
+
+                    Divider()
+
+                    // Audio entfernen Button (nur wenn Audio vorhanden)
+                    if (selectedPointForAudio!!.audioUri != null) {
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.removeAudioFromPoint()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Text("🗑️ Audio entfernen")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.closeAudioDialog() }
+                ) {
+                    Text("Schließen")
+                }
+            }
+        )
+    }
 }
 
-// Hilfsfunktion für Link-Erkennung
+// Link-Erkennung
 private fun AnnotatedString.Builder.parseTextWithLinks(text: String) {
     val urlPattern = Pattern.compile(
         "(?i)\\b(?:https?://|www\\.)[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]"
@@ -425,15 +674,13 @@ private fun AnnotatedString.Builder.parseTextWithLinks(text: String) {
         val end = matcher.end()
         val url = matcher.group()
 
-        // Text vor dem Link hinzufügen
         if (start > lastEnd) {
             append(text.substring(lastEnd, start))
         }
 
-        // Link hinzufügen mit Styling und Annotation
         withStyle(
             style = SpanStyle(
-                color = androidx.compose.ui.graphics.Color.Blue,
+                color = Color.Blue,
                 textDecoration = TextDecoration.Underline
             )
         ) {
@@ -448,31 +695,33 @@ private fun AnnotatedString.Builder.parseTextWithLinks(text: String) {
         lastEnd = end
     }
 
-    // Restlichen Text hinzufügen
     if (lastEnd < text.length) {
         append(text.substring(lastEnd))
     }
 }
 
+// Punkte zeichnen
 private fun DrawScope.drawPointsWithIndividualRadii(points: List<DrawPoint>, isEditMode: Boolean) {
     points.forEach { point ->
         if (isEditMode) {
-            // Editiermodus: Normale Darstellung
-            val pointColor = if (point.text != null) Color.Green else Color.Red
+            val pointColor = when {
+                point.text != null && point.audioUri != null -> Color(0xFF4CAF50) // Grün
+                point.text != null -> Color(0xFFFFC107) // Gelb
+                point.audioUri != null -> Color(0xFF2196F3) // Blau
+                else -> Color(0xFFF44336) // Rot
+            }
 
-            // Punkt als gefüllter Kreis mit individuellem Radius
             drawCircle(
                 color = pointColor,
                 radius = point.radius,
                 center = Offset(point.x, point.y)
             )
 
-            // Punkt-Name über dem Punkt
             drawIntoCanvas { canvas ->
-                val paint = android.graphics.Paint().apply {
+                val paint = Paint().apply {
                     color = Color.Black.toArgb()
                     textSize = (point.radius * 0.6f).coerceIn(16f, 48f)
-                    textAlign = android.graphics.Paint.Align.CENTER
+                    textAlign = Paint.Align.CENTER
                     isAntiAlias = true
                     isFakeBoldText = true
                 }
@@ -485,26 +734,28 @@ private fun DrawScope.drawPointsWithIndividualRadii(points: List<DrawPoint>, isE
                 )
             }
 
-            // Umrandung des Punktes
             drawCircle(
                 color = Color.Black,
                 radius = point.radius,
                 center = Offset(point.x, point.y),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
+                style = Stroke(width = 3f)
             )
 
-            // Text-Indikator (kleiner Punkt) wenn Text vorhanden
             if (point.text != null) {
                 drawCircle(
                     color = Color.White,
                     radius = 6f,
-                    center = Offset(point.x, point.y)
+                    center = Offset(point.x - 8f, point.y)
                 )
             }
-        } else {
-            // Übungsmodus: Hotspots komplett unsichtbar (0% Transparenz)
-            // Aber weiterhin klickbar durch Hit-Detection
-            // Nichts zeichnen - unsichtbare Hotspots!
+
+            if (point.audioUri != null) {
+                drawCircle(
+                    color = Color.White,
+                    radius = 6f,
+                    center = Offset(point.x + 8f, point.y)
+                )
+            }
         }
     }
 }
