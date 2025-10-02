@@ -1,11 +1,14 @@
 // DrawingScreen.kt
 package de.softopus.hotklick
 
-import android.graphics.Paint
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
-import android.net.Uri as AndroidUri// DrawingScreen.kt
+import android.content.ContentValues
+import android.media.MediaPlayer
+import android.media.MediaRecorder
 import android.net.Uri
+import android.net.Uri as AndroidUri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -23,14 +26,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -42,24 +45,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import de.softopus.hotklick.data.DrawPoint
 import de.softopus.hotklick.viewmodel.DrawingViewModel
-import java.util.regex.Pattern
-import kotlin.math.sqrt
-
-import android.media.MediaPlayer
-import android.media.MediaRecorder
-import android.os.Build
-import android.os.Environment
-import androidx.compose.runtime.DisposableEffect
+import kotlinx.coroutines.delay
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
-import android.content.ContentValues
-import android.provider.MediaStore
-
+import java.util.regex.Pattern
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,52 +69,43 @@ fun DrawingScreen(
     val showRecorderDialog by viewModel.showRecorderDialog.collectAsState()
     val isRecording by viewModel.isRecording.collectAsState()
     val recordingDuration by viewModel.recordingDuration.collectAsState()
+    val currentRecordingPointName by viewModel.currentRecordingPointName.collectAsState()  // NEU
     val isEditMode by viewModel.isEditMode.collectAsState()
     val selectedHotspotText by viewModel.selectedHotspotText.collectAsState()
     val selectedHotspotName by viewModel.selectedHotspotName.collectAsState()
     val density = LocalDensity.current
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
-    val coroutineScope = rememberCoroutineScope()
 
-    // MediaPlayer für Audio-Wiedergabe
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
-
-// MediaRecorder für Audio-Aufnahme
     var mediaRecorder: MediaRecorder? by remember { mutableStateOf(null) }
     var recordingFile: File? by remember { mutableStateOf(null) }
 
-    // MediaPlayer und MediaRecorder aufräumen
     DisposableEffect(Unit) {
         onDispose {
             mediaPlayer?.release()
             mediaPlayer = null
             mediaRecorder?.apply {
-                try {
-                    stop()
-                } catch (e: Exception) { }
+                try { stop() } catch (e: Exception) { }
                 release()
             }
             mediaRecorder = null
         }
     }
 
-    // Image Picker Launcher für Editiermodus
     val editImagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         viewModel.setBackgroundImage(uri)
     }
 
-    // Image Picker Launcher für Übungsmodus
     val practiceImagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         viewModel.setBackgroundImage(uri)
     }
 
-    // Audio File Picker
     val audioPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -132,11 +114,8 @@ fun DrawingScreen(
         }
     }
 
-    // Konvertierung der gewünschten Pixel-Größe in dp
     val canvasWidthDp = 800.dp
     val canvasHeightDp = 600.dp
-
-
 
     Column(
         modifier = Modifier
@@ -144,14 +123,12 @@ fun DrawingScreen(
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Zeichenbereich mit Hintergrundbild
         Card(
             modifier = Modifier.size(canvasWidthDp, canvasHeightDp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                // Hintergrundbild
                 if (backgroundImageUri != null) {
                     AsyncImage(
                         model = backgroundImageUri,
@@ -161,16 +138,14 @@ fun DrawingScreen(
                     )
                 }
 
-                // Canvas für Punkte über dem Bild
                 Canvas(
                     modifier = Modifier
                         .fillMaxSize()
                         .pointerInput(points, pointRadius, isEditMode) {
                             detectTapGestures(
                                 onTap = { offset: Offset ->
-                                    // Hit-Detection für Punkte
                                     val hitPoint = points.find { point ->
-                                        val distance = sqrt(
+                                        val distance = kotlin.math.sqrt(
                                             (offset.x - point.x) * (offset.x - point.x) +
                                                     (offset.y - point.y) * (offset.y - point.y)
                                         )
@@ -178,17 +153,14 @@ fun DrawingScreen(
                                     }
 
                                     if (isEditMode) {
-                                        // Single-Tap: Punkt löschen
                                         if (hitPoint != null) {
                                             viewModel.deletePoint(hitPoint.id, hitPoint.name)
                                         }
                                     } else {
-                                        // Übungsmodus
                                         if (hitPoint != null) {
                                             if (hitPoint.text != null && hitPoint.text.isNotEmpty()) {
                                                 viewModel.showHotspotText(hitPoint)
 
-                                                // Audio stoppen bei Single-Click
                                                 mediaPlayer?.apply {
                                                     if (isPlaying()) {
                                                         stop()
@@ -202,7 +174,6 @@ fun DrawingScreen(
                                         } else {
                                             viewModel.clearHotspotText()
 
-                                            // Audio stoppen bei Klick außerhalb
                                             mediaPlayer?.apply {
                                                 if (isPlaying()) {
                                                     stop()
@@ -217,9 +188,8 @@ fun DrawingScreen(
                                 },
                                 onLongPress = { offset: Offset ->
                                     if (isEditMode) {
-                                        // Hit-Detection für Punkte
                                         val hitPoint = points.find { point ->
-                                            val distance = sqrt(
+                                            val distance = kotlin.math.sqrt(
                                                 (offset.x - point.x) * (offset.x - point.x) +
                                                         (offset.y - point.y) * (offset.y - point.y)
                                             )
@@ -227,21 +197,18 @@ fun DrawingScreen(
                                         }
 
                                         if (hitPoint != null) {
-                                            // Long-Press auf bestehendem Hotspot: Audio-Dialog öffnen
                                             viewModel.openAudioDialog(hitPoint)
                                         } else {
-                                            // Long-Press auf leerem Bereich: Neuen Punkt erstellen
                                             viewModel.addPoint(offset.x, offset.y)
                                         }
                                     } else {
-                                        // Übungsmodus: Bild laden
                                         practiceImagePickerLauncher.launch("image/*")
                                     }
                                 },
                                 onDoubleTap = { offset: Offset ->
                                     if (isEditMode) {
                                         val hitPoint = points.find { point ->
-                                            val distance = sqrt(
+                                            val distance = kotlin.math.sqrt(
                                                 (offset.x - point.x) * (offset.x - point.x) +
                                                         (offset.y - point.y) * (offset.y - point.y)
                                             )
@@ -252,9 +219,8 @@ fun DrawingScreen(
                                             viewModel.openTextDialog(point)
                                         }
                                     } else {
-                                        // Übungsmodus: Double-Click spielt Audio ab
                                         val hitPoint = points.find { point ->
-                                            val distance = sqrt(
+                                            val distance = kotlin.math.sqrt(
                                                 (offset.x - point.x) * (offset.x - point.x) +
                                                         (offset.y - point.y) * (offset.y - point.y)
                                             )
@@ -262,14 +228,11 @@ fun DrawingScreen(
                                         }
 
                                         if (hitPoint != null && hitPoint.audioUri != null) {
-                                            // Text anzeigen
                                             if (hitPoint.text != null && hitPoint.text.isNotEmpty()) {
                                                 viewModel.showHotspotText(hitPoint)
                                             }
 
-                                            // Audio abspielen
                                             try {
-                                                // Alten Player stoppen und aufräumen
                                                 mediaPlayer?.apply {
                                                     if (isPlaying()) {
                                                         stop()
@@ -278,7 +241,6 @@ fun DrawingScreen(
                                                     release()
                                                 }
 
-                                                // Neuen Player erstellen und Audio abspielen
                                                 mediaPlayer = MediaPlayer().apply {
                                                     setDataSource(context, AndroidUri.parse(hitPoint.audioUri))
                                                     prepare()
@@ -309,7 +271,6 @@ fun DrawingScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Modus-Toggle Button
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center
@@ -337,7 +298,7 @@ fun DrawingScreen(
                 )
             ) {
                 Text(
-                    text = if (isEditMode) "🖊️ Editiermodus (Click → Übung)" else "🎯 Übungsmodus (Long-Click → Edit)",
+                    text = if (isEditMode) "Editiermodus (Click → Übung)" else "Übungsmodus (Long-Click → Edit)",
                     fontWeight = FontWeight.Bold,
                     color = if (isEditMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onTertiary,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
@@ -347,7 +308,6 @@ fun DrawingScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Übungsmodus-Hinweise
         if (!isEditMode) {
             Text(
                 text = "Long-Click: Bild laden • 1x-Click: Text anzeigen • 2x-Click: Audio abspielen",
@@ -358,7 +318,6 @@ fun DrawingScreen(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // Editiermodus-Hinweise
         if (isEditMode) {
             Text(
                 text = "Long-Press leer: Hotspot erstellen • Long-Press Hotspot: Audio • 1x-Click: Löschen • 2x-Click: Text",
@@ -370,7 +329,6 @@ fun DrawingScreen(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // Buttons (nur im Editiermodus)
         if (isEditMode) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -399,7 +357,6 @@ fun DrawingScreen(
                     }
                 }
 
-                // Radius Stepper
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     modifier = Modifier.height(56.dp)
@@ -441,7 +398,6 @@ fun DrawingScreen(
             }
         }
 
-        // Status-Anzeige
         if (points.isNotEmpty()) {
             Text(
                 text = "${points.size} Hotspots: ${points.count { it.text != null }} mit Text, ${points.count { it.audioUri != null }} mit Audio",
@@ -451,7 +407,6 @@ fun DrawingScreen(
             )
         }
 
-        // Übungsmodus: Text-Anzeige
         if (!isEditMode && selectedHotspotText.isNotEmpty()) {
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -504,7 +459,6 @@ fun DrawingScreen(
         }
     }
 
-    // Text-Dialog
     if (isEditMode && showTextDialog && selectedPointForText != null) {
         AlertDialog(
             onDismissRequest = { viewModel.closeTextDialog() },
@@ -553,7 +507,6 @@ fun DrawingScreen(
         )
     }
 
-    // Audio-Dialog
     if (isEditMode && showAudioDialog && selectedPointForAudio != null) {
         AlertDialog(
             onDismissRequest = { viewModel.closeAudioDialog() },
@@ -570,7 +523,6 @@ fun DrawingScreen(
                         fontWeight = FontWeight.Bold
                     )
 
-                    // Aktueller Audio-Status
                     if (selectedPointForAudio!!.audioUri != null) {
                         Card(
                             colors = CardDefaults.cardColors(
@@ -604,36 +556,32 @@ fun DrawingScreen(
                         )
                     }
 
-                    Divider()
+                    HorizontalDivider()
 
-                    // Option 1: Audio-Datei auswählen
                     Button(
                         onClick = {
                             audioPickerLauncher.launch("audio/*")
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("📁 MP3-Datei laden")
+                        Text("MP3-Datei laden")
                     }
 
-                    // Option 2: Audio aufnehmen
                     Button(
                         onClick = {
-                            println("DEBUG: Audio aufnehmen Button geklickt")
                             viewModel.openRecorderDialog()
+                            viewModel.closeAudioDialog()
                         },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),                        colors = ButtonDefaults.buttonColors(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.secondary
                         )
                     ) {
                         Text("🎤 Audio aufnehmen")
                     }
 
-                    Divider()
+                    HorizontalDivider()
 
-                    // Audio entfernen Button (nur wenn Audio vorhanden)
                     if (selectedPointForAudio!!.audioUri != null) {
                         OutlinedButton(
                             onClick = {
@@ -644,7 +592,7 @@ fun DrawingScreen(
                                 contentColor = MaterialTheme.colorScheme.error
                             )
                         ) {
-                            Text("🗑️ Audio entfernen")
+                            Text("Audio entfernen")
                         }
                     }
                 }
@@ -658,9 +606,237 @@ fun DrawingScreen(
             }
         )
     }
+
+    if (showRecorderDialog) {
+        RecorderDialog(
+            isRecording = isRecording,
+            recordingDuration = recordingDuration,
+            context = context,
+            mediaRecorder = mediaRecorder,
+            recordingFile = recordingFile,
+            onMediaRecorderChange = { mediaRecorder = it },
+            onRecordingFileChange = { recordingFile = it },
+            viewModel = viewModel,
+            selectedPointName = currentRecordingPointName  // GEÄNDERT - verwende State
+        )
+    }
 }
 
-// Link-Erkennung
+@Composable
+fun RecorderDialog(
+    isRecording: Boolean,
+    recordingDuration: Int,
+    context: android.content.Context,
+    mediaRecorder: MediaRecorder?,
+    recordingFile: File?,
+    onMediaRecorderChange: (MediaRecorder?) -> Unit,
+    onRecordingFileChange: (File?) -> Unit,
+    viewModel: DrawingViewModel,
+    selectedPointName: String?
+) {
+    AlertDialog(
+        onDismissRequest = {
+            if (isRecording) {
+                try {
+                    mediaRecorder?.stop()
+                    mediaRecorder?.release()
+                    onMediaRecorderChange(null)
+                    viewModel.stopRecording()
+                } catch (e: Exception) {
+                    println("DEBUG: Fehler beim Stoppen: ${e.message}")
+                }
+            }
+            viewModel.closeRecorderDialog()
+        },
+        title = { Text("Audio aufnehmen") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                if (isRecording) {
+                    Text(
+                        text = "Aufnahme läuft...",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = "${recordingDuration}s",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    LaunchedEffect(isRecording) {
+                        var duration = 0
+                        while (isRecording) {
+                            delay(1000)
+                            duration++
+                            viewModel.updateRecordingDuration(duration)
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "Bereit zur Aufnahme",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+
+                if (!isRecording) {
+                    Button(
+                        onClick = {
+                            try {
+                                val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+                                val fileName = "HotKlick_$timeStamp.m4a"
+
+                                val musicDir = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                    val contentValues = ContentValues().apply {
+                                        put(MediaStore.Audio.Media.DISPLAY_NAME, fileName)
+                                        put(MediaStore.Audio.Media.MIME_TYPE, "audio/m4a")
+                                        put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_MUSIC + "/HotKlick")
+                                    }
+                                    val uri = context.contentResolver.insert(
+                                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                                        contentValues
+                                    )
+                                    uri?.let { context.contentResolver.openFileDescriptor(it, "w")?.fileDescriptor }
+                                } else {
+                                    val musicFolder = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "HotKlick")
+                                    if (!musicFolder.exists()) {
+                                        musicFolder.mkdirs()
+                                    }
+                                    onRecordingFileChange(File(musicFolder, fileName))
+                                    null
+                                }
+
+                                val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                    MediaRecorder(context)
+                                } else {
+                                    @Suppress("DEPRECATION")
+                                    MediaRecorder()
+                                }.apply {
+                                    setAudioSource(MediaRecorder.AudioSource.MIC)
+                                    setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                                    setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                                    setAudioEncodingBitRate(128000)
+                                    setAudioSamplingRate(44100)
+
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && musicDir != null) {
+                                        setOutputFile(musicDir)
+                                    } else {
+                                        setOutputFile(recordingFile?.absolutePath)
+                                    }
+
+                                    prepare()
+                                    start()
+                                }
+
+                                onMediaRecorderChange(recorder)
+                                viewModel.startRecording()
+                            } catch (e: Exception) {
+                                println("DEBUG: Fehler beim Starten: ${e.message}")
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Aufnahme starten")
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            println("DEBUG: === AUFNAHME BEENDEN BUTTON GEKLICKT ===")
+                            try {
+                                println("DEBUG: Stoppe MediaRecorder")
+                                mediaRecorder?.apply {
+                                    stop()
+                                    println("DEBUG: Stop erfolgreich")
+                                    release()
+                                    println("DEBUG: Release erfolgreich")
+                                }
+                                onMediaRecorderChange(null)
+                                viewModel.stopRecording()
+
+                                println("DEBUG: Android Version: ${Build.VERSION.SDK_INT}")
+
+                                val audioUriToSave = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                    println("DEBUG: Verwende MediaStore Abfrage")
+                                    val projection = arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DISPLAY_NAME)
+                                    val selection = "${MediaStore.Audio.Media.DISPLAY_NAME} LIKE ?"
+                                    val selectionArgs = arrayOf("HotKlick_%")
+                                    val sortOrder = "${MediaStore.Audio.Media.DATE_ADDED} DESC"
+
+                                    var resultUri: String? = null
+                                    context.contentResolver.query(
+                                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                                        projection,
+                                        selection,
+                                        selectionArgs,
+                                        sortOrder
+                                    )?.use { cursor ->
+                                        if (cursor.moveToFirst()) {
+                                            val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                                            val id = cursor.getLong(idColumn)
+                                            val audioUri = AndroidUri.withAppendedPath(
+                                                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                                                id.toString()
+                                            )
+                                            resultUri = audioUri.toString()
+                                        }
+                                    }
+                                    resultUri
+                                } else {
+                                    println("DEBUG: Verwende direkten Dateizugriff")
+                                    recordingFile?.let { AndroidUri.fromFile(it).toString() }
+                                }
+
+                                viewModel.closeRecorderDialog()
+                                println("DEBUG: audioUriToSave = $audioUriToSave")
+                                println("DEBUG: selectedPointName = $selectedPointName")
+
+
+                                audioUriToSave?.let { uri ->
+                                    selectedPointName?.let { name ->
+                                        println("DEBUG: Rufe saveAudioToPointById auf mit Name: $name")
+                                        viewModel.saveAudioToPointById(uri, name)
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                println("DEBUG: FEHLER beim Stoppen: ${e.message}")
+                                e.printStackTrace()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("Aufnahme beenden")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (isRecording) {
+                        try {
+                            mediaRecorder?.stop()
+                            mediaRecorder?.release()
+                            onMediaRecorderChange(null)
+                            viewModel.stopRecording()
+                        } catch (e: Exception) { }
+                    }
+                    viewModel.closeRecorderDialog()
+                }
+            ) {
+                Text("Abbrechen")
+            }
+        }
+    )
+}
+
 private fun AnnotatedString.Builder.parseTextWithLinks(text: String) {
     val urlPattern = Pattern.compile(
         "(?i)\\b(?:https?://|www\\.)[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]"
@@ -680,7 +856,7 @@ private fun AnnotatedString.Builder.parseTextWithLinks(text: String) {
 
         withStyle(
             style = SpanStyle(
-                color = Color.Blue,
+                color = androidx.compose.ui.graphics.Color.Blue,
                 textDecoration = TextDecoration.Underline
             )
         ) {
@@ -700,15 +876,14 @@ private fun AnnotatedString.Builder.parseTextWithLinks(text: String) {
     }
 }
 
-// Punkte zeichnen
 private fun DrawScope.drawPointsWithIndividualRadii(points: List<DrawPoint>, isEditMode: Boolean) {
     points.forEach { point ->
         if (isEditMode) {
             val pointColor = when {
-                point.text != null && point.audioUri != null -> Color(0xFF4CAF50) // Grün
-                point.text != null -> Color(0xFFFFC107) // Gelb
-                point.audioUri != null -> Color(0xFF2196F3) // Blau
-                else -> Color(0xFFF44336) // Rot
+                point.text != null && point.audioUri != null -> Color(0xFF4CAF50)
+                point.text != null -> Color(0xFFFFC107)
+                point.audioUri != null -> Color(0xFF2196F3)
+                else -> Color(0xFFF44336)
             }
 
             drawCircle(
@@ -718,10 +893,10 @@ private fun DrawScope.drawPointsWithIndividualRadii(points: List<DrawPoint>, isE
             )
 
             drawIntoCanvas { canvas ->
-                val paint = Paint().apply {
+                val paint = android.graphics.Paint().apply {
                     color = Color.Black.toArgb()
                     textSize = (point.radius * 0.6f).coerceIn(16f, 48f)
-                    textAlign = Paint.Align.CENTER
+                    textAlign = android.graphics.Paint.Align.CENTER
                     isAntiAlias = true
                     isFakeBoldText = true
                 }
@@ -738,7 +913,7 @@ private fun DrawScope.drawPointsWithIndividualRadii(points: List<DrawPoint>, isE
                 color = Color.Black,
                 radius = point.radius,
                 center = Offset(point.x, point.y),
-                style = Stroke(width = 3f)
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
             )
 
             if (point.text != null) {
