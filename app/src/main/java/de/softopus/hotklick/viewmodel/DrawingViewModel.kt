@@ -53,9 +53,9 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
     private val _recordingDuration = MutableStateFlow(0)
     val recordingDuration: StateFlow<Int> = _recordingDuration.asStateFlow()
 
-    private val _isEditMode = MutableStateFlow(true)
+    // Modus-Verwaltung (Edit/Practice)
+    private val _isEditMode = MutableStateFlow(false)  // Start im Übungsmodus
     val isEditMode: StateFlow<Boolean> = _isEditMode.asStateFlow()
-
     private val _selectedHotspotText = MutableStateFlow("")
     val selectedHotspotText: StateFlow<String> = _selectedHotspotText.asStateFlow()
 
@@ -78,7 +78,20 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
     init {
         val database = PointDatabase.getDatabase(application)
         repository = PointRepository(database.pointDao())
-        println("DEBUG: ViewModel initialisiert")
+
+        // Lade Standard-Infobild beim Start (Übungsmodus)
+        val infoImageUri = Uri.parse("android.resource://${application.packageName}/drawable/info_practice")
+        _backgroundImageUri.value = infoImageUri
+
+        println("DEBUG: ViewModel initialisiert mit Infobild")
+    }
+
+
+    fun loadInfoImage(isEditMode: Boolean) {
+        val imageName = if (isEditMode) "info_edit" else "info_practice"
+        val infoImageUri = Uri.parse("android.resource://${getApplication<Application>().packageName}/drawable/$imageName")
+        _backgroundImageUri.value = infoImageUri
+        _currentSessionPoints.value = emptyList()
     }
 
     fun addPoint(x: Float, y: Float) {
@@ -369,6 +382,10 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             _selectedHotspotText.value = ""
             _selectedHotspotName.value = ""
             stopAudio()
+
+            // GEÄNDERT: Lade IMMER Editiermodus-Infobild beim Wechsel
+            loadInfoImage(true)
+
             _message.value = "Editiermodus aktiviert"
 
             viewModelScope.launch {
@@ -377,7 +394,6 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             }
         }
     }
-
     fun toggleToPracticeMode() {
         if (_isEditMode.value) {
             _isEditMode.value = false
@@ -386,6 +402,10 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             closeRecorderDialog()
             _selectedHotspotText.value = ""
             _selectedHotspotName.value = ""
+
+            // GEÄNDERT: Lade IMMER Übungsmodus-Infobild beim Wechsel
+            loadInfoImage(false)
+
             _message.value = "Übungsmodus aktiviert"
 
             viewModelScope.launch {
@@ -394,7 +414,6 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             }
         }
     }
-
     fun showHotspotText(point: DrawPoint) {
         if (!_isEditMode.value) {
             _selectedHotspotName.value = point.name

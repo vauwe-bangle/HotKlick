@@ -114,7 +114,7 @@ fun DrawingScreen(
         }
     }
 
-    val canvasWidthDp = 800.dp
+    val canvasWidthDp = 1024.dp
     val canvasHeightDp = 600.dp
 
     Column(
@@ -188,23 +188,34 @@ fun DrawingScreen(
                                 },
                                 onLongPress = { offset: Offset ->
                                     if (isEditMode) {
-                                        val hitPoint = points.find { point ->
-                                            val distance = kotlin.math.sqrt(
-                                                (offset.x - point.x) * (offset.x - point.x) +
-                                                        (offset.y - point.y) * (offset.y - point.y)
-                                            )
-                                            distance <= point.radius
-                                        }
+                                        // Prüfe ob Infobild geladen ist
+                                        val isInfoImage = backgroundImageUri?.toString()?.contains("info_edit") == true ||
+                                                backgroundImageUri?.toString()?.contains("info_practice") == true
 
-                                        if (hitPoint != null) {
-                                            viewModel.openAudioDialog(hitPoint)
+                                        if (backgroundImageUri == null || isInfoImage) {
+                                            // Kein Bild oder Infobild: Neues Bild laden
+                                            editImagePickerLauncher.launch("image/*")
                                         } else {
-                                            viewModel.addPoint(offset.x, offset.y)
+                                            // Arbeitsbild geladen: Hotspot-Logik
+                                            val hitPoint = points.find { point ->
+                                                val distance = kotlin.math.sqrt(
+                                                    (offset.x - point.x) * (offset.x - point.x) +
+                                                            (offset.y - point.y) * (offset.y - point.y)
+                                                )
+                                                distance <= point.radius
+                                            }
+
+                                            if (hitPoint != null) {
+                                                viewModel.openAudioDialog(hitPoint)
+                                            } else {
+                                                viewModel.addPoint(offset.x, offset.y)
+                                            }
                                         }
                                     } else {
                                         practiceImagePickerLauncher.launch("image/*")
                                     }
                                 },
+
                                 onDoubleTap = { offset: Offset ->
                                     if (isEditMode) {
                                         val hitPoint = points.find { point ->
