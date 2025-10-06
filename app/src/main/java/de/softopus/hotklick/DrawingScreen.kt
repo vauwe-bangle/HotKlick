@@ -87,7 +87,10 @@ fun DrawingScreen(
             mediaPlayer?.release()
             mediaPlayer = null
             mediaRecorder?.apply {
-                try { stop() } catch (e: Exception) { }
+                try {
+                    stop()
+                } catch (e: Exception) {
+                }
                 release()
             }
             mediaRecorder = null
@@ -150,262 +153,71 @@ fun DrawingScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center
         ) {
-            Card(
-                modifier = Modifier
-                    .pointerInput(isEditMode) {
-                        detectTapGestures(
-                            onTap = {
-                                if (isEditMode) {
-                                    viewModel.toggleToPracticeMode()
-                                }
-                            },
-                            onLongPress = { _: Offset ->
-                                if (isEditMode) {
-                                    viewModel.toggleToPracticeMode()
-                                } else {
-                                    viewModel.toggleToEditMode()
-                                }
-                            }
-                        )
-                    },
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isEditMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
-                )
-            ) {
-                Text(
-                    text = if (isEditMode) "Editiermodus (Click → Übung)" else "Übungsmodus (Long-Click → Edit)",
-                    fontWeight = FontWeight.Bold,
-                    color = if (isEditMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onTertiary,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
-                )
-            }
+            ModeToggleButton(
+                isEditMode = isEditMode,
+                viewModel = viewModel
+            )
         }
-
         Spacer(modifier = Modifier.height(8.dp))
 
         if (!isEditMode) {
-            Text(
-                text = "Long-Click: Bild laden • 1x-Click: Text anzeigen • 2x-Click: Audio abspielen",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
+            PracticeModeHints()
             Spacer(modifier = Modifier.height(8.dp))
         }
 
         if (isEditMode) {
-            Text(
-                text = "Long-Press leer: Hotspot erstellen • Long-Press Hotspot: Audio • 1x-Click: Löschen • 2x-Click: Text",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-
-        if (isEditMode) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = { editImagePickerLauncher.launch("image/*") },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Bild laden")
-                }
-
-                if (backgroundImageUri != null) {
-                    Button(
-                        onClick = { viewModel.saveDataAndClearImage() },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
-                        ),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = null)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Daten speichern & Bild entfernen")
-                    }
-                }
-
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    modifier = Modifier.height(56.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 12.dp)
-                    ) {
-                        IconButton(
-                            onClick = { viewModel.decreasePointRadius() },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Text(
-                                text = "−",
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        Text(
-                            text = "${pointRadius.toInt()}px",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-
-                        IconButton(
-                            onClick = { viewModel.increasePointRadius() },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Text(
-                                text = "+",
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        if (points.isNotEmpty()) {
-            Text(
-                text = "${points.size} Hotspots: ${points.count { it.text != null }} mit Text, ${points.count { it.audioUri != null }} mit Audio",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                modifier = Modifier.padding(top = 8.dp)
+            EditModeControls(
+                backgroundImageUri = backgroundImageUri,
+                pointRadius = pointRadius,
+                editImagePickerLauncher = editImagePickerLauncher,
+                viewModel = viewModel
             )
         }
 
-        if (!isEditMode && selectedHotspotText.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(16.dp))
+        HotspotStats(points = points)
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    ClickableText(
-                        text = buildAnnotatedString {
-                            parseTextWithLinks(selectedHotspotText)
-                        },
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        ),
-                        onClick = { offset: Int ->
-                            val annotatedString = buildAnnotatedString {
-                                parseTextWithLinks(selectedHotspotText)
-                            }
-
-                            annotatedString.getStringAnnotations(
-                                tag = "URL",
-                                start = offset,
-                                end = offset
-                            ).firstOrNull()?.let { annotation ->
-                                uriHandler.openUri(annotation.item)
-                            }
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(
-                            onClick = { viewModel.clearHotspotText() }
-                        ) {
-                            Text("Schließen")
-                        }
-                    }
-                }
-            }
+        if (!isEditMode) {
+            HotspotTextDisplay(
+                selectedHotspotText = selectedHotspotText,
+                uriHandler = uriHandler,
+                viewModel = viewModel
+            )
         }
-    }
-
 // ========== DIALOGE ==========
-    TextDialog(
-        showDialog = isEditMode && showTextDialog,
-        selectedPoint = selectedPointForText,
-        textInput = textInput,
-        onTextChange = { viewModel.updateTextInput(it) },
-        onSave = { viewModel.saveTextToPoint() },
-        onDismiss = { viewModel.closeTextDialog() }
-    )
+        TextDialog(
+            showDialog = isEditMode && showTextDialog,
+            selectedPoint = selectedPointForText,
+            textInput = textInput,
+            onTextChange = { viewModel.updateTextInput(it) },
+            onSave = { viewModel.saveTextToPoint() },
+            onDismiss = { viewModel.closeTextDialog() }
+        )
 
-    AudioDialog(
-        showDialog = isEditMode && showAudioDialog,
-        selectedPoint = selectedPointForAudio,
-        onLoadAudio = { audioPickerLauncher.launch("audio/*") },
-        onRecordAudio = {
-            viewModel.openRecorderDialog()
-            viewModel.closeAudioDialog()
-        },
-        onRemoveAudio = { viewModel.removeAudioFromPoint() },
-        onDismiss = { viewModel.closeAudioDialog() }
-    )
+        AudioDialog(
+            showDialog = isEditMode && showAudioDialog,
+            selectedPoint = selectedPointForAudio,
+            onLoadAudio = { audioPickerLauncher.launch("audio/*") },
+            onRecordAudio = {
+                viewModel.openRecorderDialog()
+                viewModel.closeAudioDialog()
+            },
+            onRemoveAudio = { viewModel.removeAudioFromPoint() },
+            onDismiss = { viewModel.closeAudioDialog() }
+        )
 
-    RecorderDialog(
-        showDialog = showRecorderDialog,
-        isRecording = isRecording,
-        recordingDuration = recordingDuration,
-        context = context,
-        mediaRecorder = mediaRecorder,
-        recordingFile = recordingFile,
-        onMediaRecorderChange = { mediaRecorder = it },
-        onRecordingFileChange = { recordingFile = it },
-        viewModel = viewModel,
-        selectedPointName = currentRecordingPointName
-    )
-}
-
-private fun AnnotatedString.Builder.parseTextWithLinks(text: String) {
-    val urlPattern = Pattern.compile(
-        "(?i)\\b(?:https?://|www\\.)[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]"
-    )
-
-    val matcher = urlPattern.matcher(text)
-    var lastEnd = 0
-
-    while (matcher.find()) {
-        val start = matcher.start()
-        val end = matcher.end()
-        val url = matcher.group()
-
-        if (start > lastEnd) {
-            append(text.substring(lastEnd, start))
-        }
-
-        withStyle(
-            style = SpanStyle(
-                color = androidx.compose.ui.graphics.Color.Blue,
-                textDecoration = TextDecoration.Underline
-            )
-        ) {
-            pushStringAnnotation(
-                tag = "URL",
-                annotation = if (url.startsWith("http")) url else "https://$url"
-            )
-            append(url)
-            pop()
-        }
-
-        lastEnd = end
-    }
-
-    if (lastEnd < text.length) {
-        append(text.substring(lastEnd))
+        RecorderDialog(
+            showDialog = showRecorderDialog,
+            isRecording = isRecording,
+            recordingDuration = recordingDuration,
+            context = context,
+            mediaRecorder = mediaRecorder,
+            recordingFile = recordingFile,
+            onMediaRecorderChange = { mediaRecorder = it },
+            onRecordingFileChange = { recordingFile = it },
+            viewModel = viewModel,
+            selectedPointName = currentRecordingPointName
+        )
     }
 }
+
 
