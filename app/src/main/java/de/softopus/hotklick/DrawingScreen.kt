@@ -77,6 +77,8 @@ fun DrawingScreen(
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
 
+    val showDeepLearningButtons by viewModel.showDeepLearningButtons.collectAsState()  // NEU
+
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
     var mediaRecorder: MediaRecorder? by remember { mutableStateOf(null) }
@@ -155,10 +157,22 @@ fun DrawingScreen(
         ) {
             ModeToggleButton(
                 isEditMode = isEditMode,
+                showDeepLearningButtons = showDeepLearningButtons,
                 viewModel = viewModel
             )
         }
+
         Spacer(modifier = Modifier.height(8.dp))
+
+// Vertiefungsmodus-Buttons
+        if (showDeepLearningButtons) {
+            DeepLearningButtons(
+                onTextClick = { /* TODO */ },
+                onAudioClick = { /* TODO */ },
+                onBothClick = { /* TODO */ }
+            )
+        }
+
 
         if (!isEditMode) {
             PracticeModeHints()

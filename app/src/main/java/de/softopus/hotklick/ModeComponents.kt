@@ -27,51 +27,118 @@ import de.softopus.hotklick.viewmodel.DrawingViewModel
 import java.util.regex.Pattern
 
 
-// MODUS-BUTTON
+// MODUS-BUTTON (MIT DOPPELKLICK)
 @Composable
 fun ModeToggleButton(
     isEditMode: Boolean,
+    showDeepLearningButtons: Boolean,
     viewModel: DrawingViewModel
 ) {
-    Card(
-        modifier = Modifier
-            .pointerInput(isEditMode) {
-                detectTapGestures(
-                    onTap = {
-                        if (isEditMode) {
-                            viewModel.toggleToPracticeMode()
+    // Button nur zeigen wenn NICHT im Vertiefungsmodus
+    if (!showDeepLearningButtons) {
+        Card(
+            modifier = Modifier
+                .pointerInput(isEditMode) {
+                    detectTapGestures(
+                        onTap = {
+                            if (isEditMode) {
+                                viewModel.toggleToPracticeMode()
+                            }
+                        },
+                        onDoubleTap = {
+                            if (!isEditMode) {
+                                viewModel.toggleDeepLearningButtons()
+                            }
+                        },
+                        onLongPress = { _: Offset ->
+                            if (isEditMode) {
+                                viewModel.toggleToPracticeMode()
+                            } else {
+                                viewModel.toggleToEditMode()
+                            }
                         }
-                    },
-                    onLongPress = { _: Offset ->
-                        if (isEditMode) {
-                            viewModel.toggleToPracticeMode()
-                        } else {
-                            viewModel.toggleToEditMode()
-                        }
-                    }
-                )
-            },
-        colors = CardDefaults.cardColors(
-            containerColor = if (isEditMode)
-                MaterialTheme.colorScheme.primary
-            else
-                MaterialTheme.colorScheme.tertiary
-        )
-    ) {
-        Text(
-            text = if (isEditMode)
-                "Editiermodus (Click → Übung)"
-            else
-                "Übungsmodus (Long-Click → Edit)",
-            fontWeight = FontWeight.Bold,
-            color = if (isEditMode)
-                MaterialTheme.colorScheme.onPrimary
-            else
-                MaterialTheme.colorScheme.onTertiary,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
-        )
+                    )
+                },
+            colors = CardDefaults.cardColors(
+                containerColor = if (isEditMode)
+                    MaterialTheme.colorScheme.primary
+                else
+                    MaterialTheme.colorScheme.tertiary
+            )
+        ) {
+            Text(
+                text = if (isEditMode)
+                    "Editiermodus (Click → Übung)"
+                else
+                    "Übungsmodus (Doppel-Click → Vertiefung)",
+                fontWeight = FontWeight.Bold,
+                color = if (isEditMode)
+                    MaterialTheme.colorScheme.onPrimary
+                else
+                    MaterialTheme.colorScheme.onTertiary,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+            )
+        }
     }
 }
+
+// VERTIEFUNGSMODUS-BUTTONS
+@Composable
+fun DeepLearningButtons(
+    onTextClick: () -> Unit,
+    onAudioClick: () -> Unit,
+    onBothClick: () -> Unit
+) {
+    Column {
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Vertiefungsmodus - Finde den richtigen Hotspot:",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.secondary,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = onTextClick,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = androidx.compose.ui.graphics.Color(0xFFFFC107)
+                )
+            ) {
+                Text("Zufall-Text", fontWeight = FontWeight.Bold)
+            }
+
+            Button(
+                onClick = onAudioClick,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = androidx.compose.ui.graphics.Color(0xFF2196F3)
+                )
+            ) {
+                Text("Zufall-Audio", fontWeight = FontWeight.Bold)
+            }
+
+            Button(
+                onClick = onBothClick,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = androidx.compose.ui.graphics.Color(0xFF4CAF50)
+                )
+            ) {
+                Text("Beides", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
 
 // EDITIERMODUS-CONTROLS
 @Composable

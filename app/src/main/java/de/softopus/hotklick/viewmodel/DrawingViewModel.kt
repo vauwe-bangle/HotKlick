@@ -68,11 +68,20 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
     private val _currentAudioUri = MutableStateFlow<String?>(null)
     val currentAudioUri: StateFlow<String?> = _currentAudioUri.asStateFlow()
 
+
+
+
     private val imageRadiusMap = mutableMapOf<String?, Float>()
 
     // Als StateFlow definieren (bei den anderen StateFlows)
     private val _currentRecordingPointName = MutableStateFlow<String?>(null)
     val currentRecordingPointName: StateFlow<String?> = _currentRecordingPointName.asStateFlow()
+
+
+    // Vertiefungsmodus States
+    private val _showDeepLearningButtons = MutableStateFlow(false)
+    val showDeepLearningButtons: StateFlow<Boolean> = _showDeepLearningButtons.asStateFlow()
+
 
 
     init {
@@ -439,5 +448,14 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
         _selectedHotspotText.value = ""
         _selectedHotspotName.value = ""
         stopAudio()
+    }
+
+    // Vertiefungsmodus Funktionen
+    fun toggleDeepLearningButtons() {
+        _showDeepLearningButtons.value = !_showDeepLearningButtons.value
+    }
+
+    fun hideDeepLearningButtons() {
+        _showDeepLearningButtons.value = false
     }
 }
