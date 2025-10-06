@@ -128,156 +128,20 @@ fun DrawingScreen(
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                if (backgroundImageUri != null) {
-                    AsyncImage(
-                        model = backgroundImageUri,
-                        contentDescription = "Hintergrundbild",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit
-                    )
-                }
-
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(points, pointRadius, isEditMode) {
-                            detectTapGestures(
-                                onTap = { offset: Offset ->
-                                    val hitPoint = points.find { point ->
-                                        val distance = kotlin.math.sqrt(
-                                            (offset.x - point.x) * (offset.x - point.x) +
-                                                    (offset.y - point.y) * (offset.y - point.y)
-                                        )
-                                        distance <= point.radius
-                                    }
-
-                                    if (isEditMode) {
-                                        if (hitPoint != null) {
-                                            viewModel.deletePoint(hitPoint.id, hitPoint.name)
-                                        }
-                                    } else {
-                                        if (hitPoint != null) {
-                                            if (hitPoint.text != null && hitPoint.text.isNotEmpty()) {
-                                                viewModel.showHotspotText(hitPoint)
-
-                                                mediaPlayer?.apply {
-                                                    if (isPlaying()) {
-                                                        stop()
-                                                        reset()
-                                                    }
-                                                    release()
-                                                }
-                                                mediaPlayer = null
-                                                isPlaying = false
-                                            }
-                                        } else {
-                                            viewModel.clearHotspotText()
-
-                                            mediaPlayer?.apply {
-                                                if (isPlaying()) {
-                                                    stop()
-                                                    reset()
-                                                }
-                                                release()
-                                            }
-                                            mediaPlayer = null
-                                            isPlaying = false
-                                        }
-                                    }
-                                },
-                                onLongPress = { offset: Offset ->
-                                    if (isEditMode) {
-                                        // Prüfe ob Infobild geladen ist
-                                        val isInfoImage = backgroundImageUri?.toString()?.contains("info_edit") == true ||
-                                                backgroundImageUri?.toString()?.contains("info_practice") == true
-
-                                        if (backgroundImageUri == null || isInfoImage) {
-                                            // Kein Bild oder Infobild: Neues Bild laden
-                                            editImagePickerLauncher.launch("image/*")
-                                        } else {
-                                            // Arbeitsbild geladen: Hotspot-Logik
-                                            val hitPoint = points.find { point ->
-                                                val distance = kotlin.math.sqrt(
-                                                    (offset.x - point.x) * (offset.x - point.x) +
-                                                            (offset.y - point.y) * (offset.y - point.y)
-                                                )
-                                                distance <= point.radius
-                                            }
-
-                                            if (hitPoint != null) {
-                                                viewModel.openAudioDialog(hitPoint)
-                                            } else {
-                                                viewModel.addPoint(offset.x, offset.y)
-                                            }
-                                        }
-                                    } else {
-                                        practiceImagePickerLauncher.launch("image/*")
-                                    }
-                                },
-
-                                onDoubleTap = { offset: Offset ->
-                                    if (isEditMode) {
-                                        val hitPoint = points.find { point ->
-                                            val distance = kotlin.math.sqrt(
-                                                (offset.x - point.x) * (offset.x - point.x) +
-                                                        (offset.y - point.y) * (offset.y - point.y)
-                                            )
-                                            distance <= point.radius
-                                        }
-
-                                        hitPoint?.let { point ->
-                                            viewModel.openTextDialog(point)
-                                        }
-                                    } else {
-                                        val hitPoint = points.find { point ->
-                                            val distance = kotlin.math.sqrt(
-                                                (offset.x - point.x) * (offset.x - point.x) +
-                                                        (offset.y - point.y) * (offset.y - point.y)
-                                            )
-                                            distance <= point.radius
-                                        }
-
-                                        if (hitPoint != null && hitPoint.audioUri != null) {
-                                            if (hitPoint.text != null && hitPoint.text.isNotEmpty()) {
-                                                viewModel.showHotspotText(hitPoint)
-                                            }
-
-                                            try {
-                                                mediaPlayer?.apply {
-                                                    if (isPlaying()) {
-                                                        stop()
-                                                    }
-                                                    reset()
-                                                    release()
-                                                }
-
-                                                mediaPlayer = MediaPlayer().apply {
-                                                    setDataSource(context, AndroidUri.parse(hitPoint.audioUri))
-                                                    prepare()
-                                                    start()
-                                                    isPlaying = true
-
-                                                    setOnCompletionListener {
-                                                        isPlaying = false
-                                                        release()
-                                                        mediaPlayer = null
-                                                    }
-                                                }
-
-                                                viewModel.playAudio(hitPoint.audioUri)
-                                            } catch (e: Exception) {
-                                                println("DEBUG: Fehler beim Audio abspielen: ${e.message}")
-                                            }
-                                        }
-                                    }
-                                }
-                            )
-                        }
-                ) {
-                    drawPointsWithIndividualRadii(points, isEditMode)
-                }
-            }
+            HotspotCanvas(
+                backgroundImageUri = backgroundImageUri,
+                points = points,
+                pointRadius = pointRadius,
+                isEditMode = isEditMode,
+                viewModel = viewModel,
+                mediaPlayer = mediaPlayer,
+                isPlaying = isPlaying,
+                onMediaPlayerChange = { mediaPlayer = it },
+                onIsPlayingChange = { isPlaying = it },
+                editImagePickerLauncher = editImagePickerLauncher,
+                practiceImagePickerLauncher = practiceImagePickerLauncher,
+                context = context
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -545,61 +409,3 @@ private fun AnnotatedString.Builder.parseTextWithLinks(text: String) {
     }
 }
 
-private fun DrawScope.drawPointsWithIndividualRadii(points: List<DrawPoint>, isEditMode: Boolean) {
-    points.forEach { point ->
-        if (isEditMode) {
-            val pointColor = when {
-                point.text != null && point.audioUri != null -> Color(0xFF4CAF50)
-                point.text != null -> Color(0xFFFFC107)
-                point.audioUri != null -> Color(0xFF2196F3)
-                else -> Color(0xFFF44336)
-            }
-
-            drawCircle(
-                color = pointColor,
-                radius = point.radius,
-                center = Offset(point.x, point.y)
-            )
-
-            drawIntoCanvas { canvas ->
-                val paint = android.graphics.Paint().apply {
-                    color = Color.Black.toArgb()
-                    textSize = (point.radius * 0.6f).coerceIn(16f, 48f)
-                    textAlign = android.graphics.Paint.Align.CENTER
-                    isAntiAlias = true
-                    isFakeBoldText = true
-                }
-
-                canvas.nativeCanvas.drawText(
-                    point.name,
-                    point.x,
-                    point.y - point.radius - 12f,
-                    paint
-                )
-            }
-
-            drawCircle(
-                color = Color.Black,
-                radius = point.radius,
-                center = Offset(point.x, point.y),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
-            )
-
-            if (point.text != null) {
-                drawCircle(
-                    color = Color.White,
-                    radius = 6f,
-                    center = Offset(point.x - 8f, point.y)
-                )
-            }
-
-            if (point.audioUri != null) {
-                drawCircle(
-                    color = Color.White,
-                    radius = 6f,
-                    center = Offset(point.x + 8f, point.y)
-                )
-            }
-        }
-    }
-}
