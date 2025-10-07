@@ -395,3 +395,83 @@ fun RecorderDialog(
         )
     }
 }
+
+// AUFGABENANZAHL-DIALOG
+@Composable
+fun TaskCountDialog(
+    showDialog: Boolean,
+    selectedType: String?,
+    onStart: (Int, String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (showDialog && selectedType != null) {
+        var taskCount by remember { mutableStateOf("5") }
+
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = {
+                Text(
+                    text = when (selectedType) {
+                        "text" -> "Zufall-Text Modus"
+                        "audio" -> "Zufall-Audio Modus"
+                        "both" -> "Text + Audio Modus"
+                        else -> "Vertiefungsmodus"
+                    },
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Wie viele Aufgaben möchten Sie üben?",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    OutlinedTextField(
+                        value = taskCount,
+                        onValueChange = {
+                            if (it.all { char -> char.isDigit() } && it.length <= 3) {
+                                taskCount = it
+                            }
+                        },
+                        label = { Text("Anzahl Aufgaben") },
+                        placeholder = { Text("z.B. 10") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Empfohlen: 5-20 Aufgaben",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val count = taskCount.toIntOrNull() ?: 5
+                        onStart(count, selectedType)
+                    },
+                    enabled = taskCount.toIntOrNull() != null &&
+                            taskCount.toIntOrNull()!! > 0 &&
+                            taskCount.toIntOrNull()!! <= 100
+                ) {
+                    Text("Starten")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Abbrechen")
+                }
+            }
+        )
+    }
+}

@@ -69,8 +69,6 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
     val currentAudioUri: StateFlow<String?> = _currentAudioUri.asStateFlow()
 
 
-
-
     private val imageRadiusMap = mutableMapOf<String?, Float>()
 
     // Als StateFlow definieren (bei den anderen StateFlows)
@@ -82,6 +80,38 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
     private val _showDeepLearningButtons = MutableStateFlow(false)
     val showDeepLearningButtons: StateFlow<Boolean> = _showDeepLearningButtons.asStateFlow()
 
+    private val _isDeepLearningMode = MutableStateFlow(false)
+    val isDeepLearningMode: StateFlow<Boolean> = _isDeepLearningMode.asStateFlow()
+
+    private val _deepLearningType = MutableStateFlow<String?>(null)
+    val deepLearningType: StateFlow<String?> = _deepLearningType.asStateFlow()
+
+    private val _showTaskCountDialog = MutableStateFlow(false)
+    val showTaskCountDialog: StateFlow<Boolean> = _showTaskCountDialog.asStateFlow()
+
+    private val _selectedDeepLearningType = MutableStateFlow<String?>(null)
+    val selectedDeepLearningType: StateFlow<String?> = _selectedDeepLearningType.asStateFlow()
+
+    private val _deepLearningTasksTotal = MutableStateFlow(0)
+    val deepLearningTasksTotal: StateFlow<Int> = _deepLearningTasksTotal.asStateFlow()
+
+    private val _deepLearningTasksCurrent = MutableStateFlow(0)
+    val deepLearningTasksCurrent: StateFlow<Int> = _deepLearningTasksCurrent.asStateFlow()
+
+    private val _deepLearningCorrect = MutableStateFlow(0)
+    val deepLearningCorrect: StateFlow<Int> = _deepLearningCorrect.asStateFlow()
+
+    private val _deepLearningWrong = MutableStateFlow(0)
+    val deepLearningWrong: StateFlow<Int> = _deepLearningWrong.asStateFlow()
+
+    private val _currentChallengePoint = MutableStateFlow<DrawPoint?>(null)
+    val currentChallengePoint: StateFlow<DrawPoint?> = _currentChallengePoint.asStateFlow()
+
+    private val _deepLearningFeedback = MutableStateFlow("")
+    val deepLearningFeedback: StateFlow<String> = _deepLearningFeedback.asStateFlow()
+
+    private val _showDeepLearningResult = MutableStateFlow(false)
+    val showDeepLearningResult: StateFlow<Boolean> = _showDeepLearningResult.asStateFlow()
 
 
     init {
@@ -89,7 +119,8 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
         repository = PointRepository(database.pointDao())
 
         // Lade Standard-Infobild beim Start (Übungsmodus)
-        val infoImageUri = Uri.parse("android.resource://${application.packageName}/drawable/info_practice")
+        val infoImageUri =
+            Uri.parse("android.resource://${application.packageName}/drawable/info_practice")
         _backgroundImageUri.value = infoImageUri
 
         println("DEBUG: ViewModel initialisiert mit Infobild")
@@ -98,7 +129,8 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
 
     fun loadInfoImage(isEditMode: Boolean) {
         val imageName = if (isEditMode) "info_edit" else "info_practice"
-        val infoImageUri = Uri.parse("android.resource://${getApplication<Application>().packageName}/drawable/$imageName")
+        val infoImageUri =
+            Uri.parse("android.resource://${getApplication<Application>().packageName}/drawable/$imageName")
         _backgroundImageUri.value = infoImageUri
         _currentSessionPoints.value = emptyList()
     }
@@ -403,6 +435,7 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             }
         }
     }
+
     fun toggleToPracticeMode() {
         if (_isEditMode.value) {
             _isEditMode.value = false
@@ -423,8 +456,9 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             }
         }
     }
+
     fun showHotspotText(point: DrawPoint) {
-        if (!_isEditMode.value) {
+        if (!_isEditMode.value) {  // <-- Diese Bedingung blockiert im Vertiefungsmodus!
             _selectedHotspotName.value = point.name
             if (point.text != null && point.text.isNotEmpty()) {
                 _selectedHotspotText.value = point.text
@@ -457,5 +491,147 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
 
     fun hideDeepLearningButtons() {
         _showDeepLearningButtons.value = false
+    }
+
+    fun openTaskCountDialog(type: String) {
+        _selectedDeepLearningType.value = type
+        _showTaskCountDialog.value = true
+    }
+
+    fun closeTaskCountDialog() {
+        _showTaskCountDialog.value = false
+        _selectedDeepLearningType.value = null
+    }
+
+    fun startDeepLearning(taskCount: Int, type: String) {
+        println("DEBUG: startDeepLearning ANFANG - taskCount=$taskCount, type=$type")
+
+        val isInfoImage = _backgroundImageUri.value?.toString()?.contains("info_") == true
+
+        if (_currentSessionPoints.value.isEmpty() || isInfoImage) {
+            println("DEBUG: VORZEITIGER EXIT - isEmpty oder isInfoImage")
+            _message.value = "Bitte laden Sie zuerst ein Bild mit Hotspots!"
+            closeTaskCountDialog()
+
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(3000)
+                _message.value = ""
+            }
+            return
+        }
+
+        println("DEBUG: Setze isDeepLearningMode = true")
+        _isDeepLearningMode.value = true
+        println("DEBUG: isDeepLearningMode ist jetzt: ${_isDeepLearningMode.value}")
+
+        _showDeepLearningButtons.value = false
+        _deepLearningType.value = type
+        _deepLearningTasksTotal.value = taskCount
+        _deepLearningTasksCurrent.value = 0
+        _deepLearningCorrect.value = 0
+        _deepLearningWrong.value = 0
+        _deepLearningFeedback.value = ""
+        closeTaskCountDialog()
+
+        nextDeepLearningChallenge()
+    }
+
+    fun nextDeepLearningChallenge() {
+        val currentPoints = _currentSessionPoints.value
+
+        println("DEBUG: nextDeepLearningChallenge - currentPoints: ${currentPoints.size}")
+        println("DEBUG: deepLearningType: ${_deepLearningType.value}")
+
+
+        val eligiblePoints = when (_deepLearningType.value) {
+            "text" -> currentPoints.filter { it.text != null && it.text.isNotEmpty() }
+            "audio" -> currentPoints.filter { it.audioUri != null }
+            "both" -> currentPoints.filter {
+                it.text != null && it.text.isNotEmpty() && it.audioUri != null
+            }
+
+            else -> emptyList()
+        }
+
+        println("DEBUG: eligiblePoints: ${eligiblePoints.size}")
+
+
+        if (eligiblePoints.isEmpty()) {
+            _deepLearningFeedback.value = "Keine passenden Hotspots gefunden!"
+            exitDeepLearningMode()
+            return
+        }
+
+        val randomPoint = eligiblePoints.random()
+        _currentChallengePoint.value = randomPoint
+        _deepLearningTasksCurrent.value += 1
+
+        println("DEBUG: Ausgewählter Punkt: ${randomPoint.name}, Text: ${randomPoint.text}")
+
+
+        when (_deepLearningType.value) {
+            "text" -> {
+                _selectedHotspotText.value = randomPoint.text ?: ""
+                println("DEBUG: selectedHotspotText gesetzt: ${_selectedHotspotText.value}")
+            }
+
+            "audio" -> {
+                _selectedHotspotText.value = ""
+                randomPoint.audioUri?.let { playAudio(it) }
+            }
+
+            "both" -> {
+                _selectedHotspotText.value = randomPoint.text ?: ""
+                randomPoint.audioUri?.let { playAudio(it) }
+            }
+        }
+    }
+
+    fun checkDeepLearningAnswer(clickedPoint: DrawPoint) {
+        println("DEBUG: checkDeepLearningAnswer aufgerufen - geklickter Punkt: ${clickedPoint.name}")
+
+        val challengePoint = _currentChallengePoint.value ?: return
+        println("DEBUG: challengePoint: ${challengePoint?.name}")
+
+
+        if (clickedPoint.name == challengePoint.name) {
+            _deepLearningCorrect.value += 1
+            _deepLearningFeedback.value = "✓ Richtig!"
+            println("DEBUG: RICHTIG! correct=${_deepLearningCorrect.value}")
+
+        } else {
+            _deepLearningWrong.value += 1
+            _deepLearningFeedback.value = "✗ Falsch! Richtig wäre: ${challengePoint.name}"
+            println("DEBUG: FALSCH! wrong=${_deepLearningWrong.value}")
+
+        }
+
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(2000)
+            _deepLearningFeedback.value = ""
+
+            if (_deepLearningTasksCurrent.value >= _deepLearningTasksTotal.value) {
+                exitDeepLearningMode()
+            } else {
+                nextDeepLearningChallenge()
+            }
+        }
+    }
+
+    fun exitDeepLearningMode() {
+        _showDeepLearningResult.value = true
+        _isDeepLearningMode.value = false
+        _currentChallengePoint.value = null
+        _selectedHotspotText.value = ""
+        stopAudio()
+    }
+
+    fun backToOverview() {
+        _showDeepLearningResult.value = false
+        _deepLearningType.value = null
+        _deepLearningTasksTotal.value = 0
+        _deepLearningTasksCurrent.value = 0
+        _deepLearningCorrect.value = 0
+        _deepLearningWrong.value = 0
     }
 }

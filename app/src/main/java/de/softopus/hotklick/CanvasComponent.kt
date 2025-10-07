@@ -28,6 +28,7 @@ fun HotspotCanvas(
     points: List<DrawPoint>,
     pointRadius: Float,
     isEditMode: Boolean,
+    isDeepLearningMode: Boolean,  // NEU
     viewModel: DrawingViewModel,
     mediaPlayer: MediaPlayer?,
     isPlaying: Boolean,
@@ -50,27 +51,40 @@ fun HotspotCanvas(
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(points, pointRadius, isEditMode) {
+                .pointerInput(points, pointRadius, isEditMode, isDeepLearningMode) {  // <-- HINZUGEFÜGT
                     detectTapGestures(
                         onTap = { offset: Offset ->
                             val hitPoint = findHitPoint(points, offset)
+
+                            println("DEBUG Canvas: Klick erkannt, isDeepLearningMode=$isDeepLearningMode, hitPoint=${hitPoint?.name}")
 
                             if (isEditMode) {
                                 hitPoint?.let {
                                     viewModel.deletePoint(it.id, it.name)
                                 }
                             } else {
-                                if (hitPoint != null) {
-                                    if (hitPoint.text != null && hitPoint.text.isNotEmpty()) {
-                                        viewModel.showHotspotText(hitPoint)
-                                        stopMediaPlayer(mediaPlayer, onMediaPlayerChange, onIsPlayingChange)
+                                if (isDeepLearningMode) {
+                                    println("DEBUG Canvas: Im Vertiefungsmodus, rufe checkDeepLearningAnswer auf")
+                                    if (hitPoint != null) {
+                                        viewModel.checkDeepLearningAnswer(hitPoint)
+                                    } else {
+                                        println("DEBUG Canvas: Kein Hotspot getroffen")
                                     }
                                 } else {
-                                    viewModel.clearHotspotText()
-                                    stopMediaPlayer(mediaPlayer, onMediaPlayerChange, onIsPlayingChange)
+                                    // Normaler Übungsmodus
+                                    if (hitPoint != null) {
+                                        if (hitPoint.text != null && hitPoint.text.isNotEmpty()) {
+                                            viewModel.showHotspotText(hitPoint)
+                                            stopMediaPlayer(mediaPlayer, onMediaPlayerChange, onIsPlayingChange)
+                                        }
+                                    } else {
+                                        viewModel.clearHotspotText()
+                                        stopMediaPlayer(mediaPlayer, onMediaPlayerChange, onIsPlayingChange)
+                                    }
                                 }
                             }
                         },
+
                         onLongPress = { offset: Offset ->
                             if (isEditMode) {
                                 val isInfoImage = backgroundImageUri?.toString()?.contains("info_edit") == true ||

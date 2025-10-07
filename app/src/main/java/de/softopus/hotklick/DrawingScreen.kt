@@ -72,12 +72,26 @@ fun DrawingScreen(
     val currentRecordingPointName by viewModel.currentRecordingPointName.collectAsState()  // NEU
     val isEditMode by viewModel.isEditMode.collectAsState()
     val selectedHotspotText by viewModel.selectedHotspotText.collectAsState()
+
+    LaunchedEffect(selectedHotspotText) {
+        println("DEBUG DrawingScreen: selectedHotspotText = '$selectedHotspotText'")
+    }
     val selectedHotspotName by viewModel.selectedHotspotName.collectAsState()
     val density = LocalDensity.current
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
 
     val showDeepLearningButtons by viewModel.showDeepLearningButtons.collectAsState()  // NEU
+
+    val isDeepLearningMode by viewModel.isDeepLearningMode.collectAsState()
+    val showTaskCountDialog by viewModel.showTaskCountDialog.collectAsState()
+    val selectedDeepLearningType by viewModel.selectedDeepLearningType.collectAsState()
+    val deepLearningTasksCurrent by viewModel.deepLearningTasksCurrent.collectAsState()
+    val deepLearningTasksTotal by viewModel.deepLearningTasksTotal.collectAsState()
+    val deepLearningCorrect by viewModel.deepLearningCorrect.collectAsState()
+    val deepLearningWrong by viewModel.deepLearningWrong.collectAsState()
+    val deepLearningFeedback by viewModel.deepLearningFeedback.collectAsState()
+    val showDeepLearningResult by viewModel.showDeepLearningResult.collectAsState()  // NEU
 
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
@@ -133,11 +147,14 @@ fun DrawingScreen(
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
+            println("DEBUG DrawingScreen VOR Canvas: isDeepLearningMode=$isDeepLearningMode")
+
             HotspotCanvas(
                 backgroundImageUri = backgroundImageUri,
                 points = points,
                 pointRadius = pointRadius,
                 isEditMode = isEditMode,
+                isDeepLearningMode = isDeepLearningMode,  // NEU
                 viewModel = viewModel,
                 mediaPlayer = mediaPlayer,
                 isPlaying = isPlaying,
@@ -158,24 +175,38 @@ fun DrawingScreen(
             ModeToggleButton(
                 isEditMode = isEditMode,
                 showDeepLearningButtons = showDeepLearningButtons,
+                isDeepLearningMode = isDeepLearningMode,  // NEU
+                tasksCurrent = deepLearningTasksCurrent,  // NEU
+                tasksTotal = deepLearningTasksTotal,  // NEU
+                correct = deepLearningCorrect,  // NEU
                 viewModel = viewModel
             )
         }
-
         Spacer(modifier = Modifier.height(8.dp))
 
 // Vertiefungsmodus-Buttons
+
         if (showDeepLearningButtons) {
             DeepLearningButtons(
-                onTextClick = { /* TODO */ },
-                onAudioClick = { /* TODO */ },
-                onBothClick = { /* TODO */ }
+                onTextClick = { viewModel.openTaskCountDialog("text") },
+                onAudioClick = { viewModel.openTaskCountDialog("audio") },
+                onBothClick = { viewModel.openTaskCountDialog("both") }
             )
         }
 
-
         if (!isEditMode) {
             PracticeModeHints()
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+// Ergebnis-Anzeige
+        if (showDeepLearningResult) {
+            DeepLearningResult(
+                tasksTotal = deepLearningTasksTotal,
+                correct = deepLearningCorrect,
+                wrong = deepLearningWrong,
+                onBack = { viewModel.backToOverview() }
+            )
             Spacer(modifier = Modifier.height(8.dp))
         }
 
@@ -198,6 +229,7 @@ fun DrawingScreen(
             )
         }
 // ========== DIALOGE ==========
+
         TextDialog(
             showDialog = isEditMode && showTextDialog,
             selectedPoint = selectedPointForText,
@@ -230,6 +262,13 @@ fun DrawingScreen(
             onRecordingFileChange = { recordingFile = it },
             viewModel = viewModel,
             selectedPointName = currentRecordingPointName
+        )
+
+        TaskCountDialog(
+            showDialog = showTaskCountDialog,
+            selectedType = selectedDeepLearningType,
+            onStart = { count, type -> viewModel.startDeepLearning(count, type) },
+            onDismiss = { viewModel.closeTaskCountDialog() }
         )
     }
 }

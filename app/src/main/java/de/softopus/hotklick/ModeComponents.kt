@@ -32,13 +32,16 @@ import java.util.regex.Pattern
 fun ModeToggleButton(
     isEditMode: Boolean,
     showDeepLearningButtons: Boolean,
+    isDeepLearningMode: Boolean,  // NEU
+    tasksCurrent: Int,  // NEU
+    tasksTotal: Int,  // NEU
+    correct: Int,  // NEU
     viewModel: DrawingViewModel
 ) {
-    // Button nur zeigen wenn NICHT im Vertiefungsmodus
     if (!showDeepLearningButtons) {
         Card(
             modifier = Modifier
-                .pointerInput(isEditMode) {
+                .pointerInput(isEditMode, isDeepLearningMode) {
                     detectTapGestures(
                         onTap = {
                             if (isEditMode) {
@@ -46,36 +49,39 @@ fun ModeToggleButton(
                             }
                         },
                         onDoubleTap = {
-                            if (!isEditMode) {
+                            if (!isEditMode && !isDeepLearningMode) {
                                 viewModel.toggleDeepLearningButtons()
                             }
                         },
                         onLongPress = { _: Offset ->
                             if (isEditMode) {
                                 viewModel.toggleToPracticeMode()
-                            } else {
+                            } else if (!isDeepLearningMode) {
                                 viewModel.toggleToEditMode()
                             }
                         }
                     )
                 },
             colors = CardDefaults.cardColors(
-                containerColor = if (isEditMode)
-                    MaterialTheme.colorScheme.primary
-                else
-                    MaterialTheme.colorScheme.tertiary
+                containerColor = when {
+                    isDeepLearningMode -> MaterialTheme.colorScheme.secondary
+                    isEditMode -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.tertiary
+                }
             )
         ) {
             Text(
-                text = if (isEditMode)
-                    "Editiermodus (Click → Übung)"
-                else
-                    "Übungsmodus (Doppel-Click → Vertiefung)",
+                text = when {
+                    isDeepLearningMode -> "Vertiefung: Aufgabe $tasksCurrent/$tasksTotal • ✓ $correct Richtig"
+                    isEditMode -> "Editiermodus (Click → Übung)"
+                    else -> "Übungsmodus (Doppel-Click → Vertiefung)"
+                },
                 fontWeight = FontWeight.Bold,
-                color = if (isEditMode)
-                    MaterialTheme.colorScheme.onPrimary
-                else
-                    MaterialTheme.colorScheme.onTertiary,
+                color = when {
+                    isDeepLearningMode -> MaterialTheme.colorScheme.onSecondary
+                    isEditMode -> MaterialTheme.colorScheme.onPrimary
+                    else -> MaterialTheme.colorScheme.onTertiary
+                },
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
             )
         }
@@ -313,6 +319,49 @@ fun HotspotTextDisplay(
     }
 }
 
+
+// VERTIEFUNGSMODUS ERGEBNIS (AUSFÜHRLICH)
+@Composable
+fun DeepLearningResult(
+    tasksTotal: Int,
+    correct: Int,
+    wrong: Int,
+    onBack: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        ),
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val percentage = if (tasksTotal > 0) (correct * 100.0 / tasksTotal) else 0.0
+
+            Text(
+                text = "Von $tasksTotal Aufgaben hast du $correct Aufgaben richtig gelöst. Dies entspricht ${"%.1f".format(percentage)}%.",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+
+            Button(
+                onClick = onBack,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Text("Zurück zum Übungsmodus")
+            }
+        }
+    }
+}
 // HILFSFUNKTION FÜR LINK-PARSING (aus DrawingScreen.kt verschoben)
 private fun androidx.compose.ui.text.AnnotatedString.Builder.parseTextWithLinks(text: String) {
     val urlPattern = Pattern.compile(
