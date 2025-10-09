@@ -51,6 +51,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.regex.Pattern
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.text.style.TextAlign
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,12 +82,10 @@ fun DrawingScreen(
         println("DEBUG DrawingScreen: selectedHotspotText = '$selectedHotspotText'")
     }
     val selectedHotspotName by viewModel.selectedHotspotName.collectAsState()
-    val density = LocalDensity.current
-    val context = LocalContext.current
-    val uriHandler = LocalUriHandler.current
 
+
+// Audio-Wiedergabe für Vertiefungsmodus
     val showDeepLearningButtons by viewModel.showDeepLearningButtons.collectAsState()  // NEU
-
     val isDeepLearningMode by viewModel.isDeepLearningMode.collectAsState()
     val showTaskCountDialog by viewModel.showTaskCountDialog.collectAsState()
     val selectedDeepLearningType by viewModel.selectedDeepLearningType.collectAsState()
@@ -91,12 +94,52 @@ fun DrawingScreen(
     val deepLearningCorrect by viewModel.deepLearningCorrect.collectAsState()
     val deepLearningWrong by viewModel.deepLearningWrong.collectAsState()
     val deepLearningFeedback by viewModel.deepLearningFeedback.collectAsState()
-    val showDeepLearningResult by viewModel.showDeepLearningResult.collectAsState()  // NEU
-
+    val showDeepLearningResult by viewModel.showDeepLearningResult.collectAsState()
+    val density = LocalDensity.current
+    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
     var mediaRecorder: MediaRecorder? by remember { mutableStateOf(null) }
     var recordingFile: File? by remember { mutableStateOf(null) }
+
+    val currentAudio by viewModel.currentAudioUri.collectAsState()
+
+    LaunchedEffect(currentAudio, isDeepLearningMode, deepLearningTasksCurrent) {  // Counter hinzufügen!
+        println("DEBUG LaunchedEffect: currentAudio=$currentAudio, isDeepLearningMode=$isDeepLearningMode, task=$deepLearningTasksCurrent")
+
+        if (isDeepLearningMode && currentAudio != null) {
+            println("DEBUG: Bedingung erfüllt - starte Audio")
+            try {
+                println("DEBUG: Versuche Audio abzuspielen: $currentAudio")
+
+                mediaPlayer?.apply {
+                    if (isPlaying()) stop()
+                    reset()
+                    release()
+                }
+
+                mediaPlayer = MediaPlayer().apply {
+                    setDataSource(context, Uri.parse(currentAudio))
+                    prepare()
+                    start()
+                    isPlaying = true
+
+                    setOnCompletionListener {
+                        isPlaying = false
+                        release()
+                        mediaPlayer = null
+                    }
+                }
+
+                println("DEBUG: Audio erfolgreich gestartet")
+            } catch (e: Exception) {
+                println("DEBUG: Fehler beim Audio abspielen: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+    }
+
 
     DisposableEffect(Unit) {
         onDispose {
@@ -139,13 +182,48 @@ fun DrawingScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // ÜBUNGSNAME - IMMER VORHANDEN (fixe Position)
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                if (backgroundImageUri != null && !backgroundImageUri.toString().contains("info_")) {
+                    val fileName = getFileNameFromUri(context, backgroundImageUri.toString())  // context hinzufügen!
+                    if (fileName.isNotEmpty()) {
+                        Text(
+                            text = fileName,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "Keine Übung geladen",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         Card(
             modifier = Modifier.size(canvasWidthDp, canvasHeightDp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            colors = CardDefaults.cardColors(containerColor = Color.White),            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
             println("DEBUG DrawingScreen VOR Canvas: isDeepLearningMode=$isDeepLearningMode")
 
@@ -272,5 +350,61 @@ fun DrawingScreen(
         )
     }
 }
+
+private fun getFileNameFromUri(context: android.content.Context, uriString: String): String {
+    return try {
+        val uri = Uri.parse(uriString)
+        println("DEBUG getFileName: URI = $uriString")
+        println("DEBUG getFileName: Scheme = ${uri.scheme}")
+        println("DEBUG getFileName: Authority = ${uri.authority}")
+        println("DEBUG getFileName: Path = ${uri.path}")
+
+        if (uri.scheme == "content") {
+            var displayName = ""
+
+            // Versuche DISPLAY_NAME zu holen
+            context.contentResolver.query(
+                uri,
+                arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                println("DEBUG getFileName: Cursor count = ${cursor.count}")
+                if (cursor.moveToFirst()) {
+                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    println("DEBUG getFileName: nameIndex = $nameIndex")
+                    if (nameIndex != -1) {
+                        displayName = cursor.getString(nameIndex)
+                        println("DEBUG getFileName: DISPLAY_NAME = $displayName")
+                    }
+                }
+            }
+
+            if (displayName.isNotEmpty()) {
+                // Entferne Dateiendung (.jpg, .png, etc.)
+                val nameWithoutExtension = displayName.substringBeforeLast(".")
+                println("DEBUG getFileName: Ergebnis = $nameWithoutExtension")
+                return nameWithoutExtension
+            }
+
+            println("DEBUG getFileName: Kein DISPLAY_NAME gefunden")
+            return "Unbekannte Übung"
+        } else if (uri.scheme == "file") {
+            val path = uri.path ?: ""
+            val fileName = path.substringAfterLast("/")
+            return fileName.substringBeforeLast(".")
+        } else {
+            return ""
+        }
+    } catch (e: Exception) {
+        println("DEBUG getFileName: Exception = ${e.message}")
+        e.printStackTrace()
+        return "Fehler beim Laden"
+    }
+}
+
+
+
 
 

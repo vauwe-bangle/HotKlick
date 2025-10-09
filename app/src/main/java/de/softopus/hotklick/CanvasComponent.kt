@@ -64,11 +64,24 @@ fun HotspotCanvas(
                                 }
                             } else {
                                 if (isDeepLearningMode) {
-                                    println("DEBUG Canvas: Im Vertiefungsmodus, rufe checkDeepLearningAnswer auf")
+                                    println("DEBUG Canvas: Im Vertiefungsmodus")
                                     if (hitPoint != null) {
+                                        println("DEBUG Canvas: Hotspot getroffen: ${hitPoint.name}")
                                         viewModel.checkDeepLearningAnswer(hitPoint)
                                     } else {
-                                        println("DEBUG Canvas: Kein Hotspot getroffen")
+                                        println("DEBUG Canvas: Kein Hotspot getroffen - erstelle Dummy-Point")
+                                        // FEHLER-KLICK: Erstelle Dummy-Point für falsche Antwort
+                                        val dummyPoint = DrawPoint(
+                                            id = -1,
+                                            name = "FEHLER",
+                                            x = 0f,
+                                            y = 0f,
+                                            radius = 0f,
+                                            imageUri = null,
+                                            text = null,
+                                            audioUri = null
+                                        )
+                                        viewModel.checkDeepLearningAnswer(dummyPoint)
                                     }
                                 } else {
                                     // Normaler Übungsmodus
@@ -84,7 +97,6 @@ fun HotspotCanvas(
                                 }
                             }
                         },
-
                         onLongPress = { offset: Offset ->
                             if (isEditMode) {
                                 val isInfoImage = backgroundImageUri?.toString()?.contains("info_edit") == true ||

@@ -12,6 +12,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.File
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+
+import android.content.Intent
 
 class DrawingViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -157,10 +164,19 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
         _message.value = "Punkt $pointName erstellt"
 
         viewModelScope.launch {
-            kotlinx.coroutines.delay(3000)
-            _message.value = ""
-        }
-    }
+            kotlinx.coroutines.delay(2000)
+            _deepLearningFeedback.value = ""
+
+            println("DEBUG: Nach 2 Sekunden - tasksCurrent=${_deepLearningTasksCurrent.value}, tasksTotal=${_deepLearningTasksTotal.value}")
+
+            if (_deepLearningTasksCurrent.value >= _deepLearningTasksTotal.value) {
+                println("DEBUG: Alle Aufgaben fertig - exitDeepLearningMode")
+                exitDeepLearningMode()
+            } else {
+                println("DEBUG: Rufe nextDeepLearningChallenge auf")
+                nextDeepLearningChallenge()
+            }
+        }    }
 
     fun deletePoint(pointId: Int, pointName: String) {
         val currentPoints = _currentSessionPoints.value.toMutableList()
@@ -317,14 +333,26 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
         println("DEBUG: selectedPoint: ${selectedPoint?.name}")
 
         if (selectedPoint != null) {
+            // Kopiere Audio in App-Speicher
+            val localUri = copyAudioToAppStorage(audioUri)
+
+            if (localUri == null) {
+                _message.value = "Fehler beim Kopieren der Audio-Datei"
+                viewModelScope.launch {
+                    kotlinx.coroutines.delay(3000)
+                    _message.value = ""
+                }
+                return
+            }
+
             val currentPoints = _currentSessionPoints.value.toMutableList()
             val pointIndex = currentPoints.indexOfFirst { it.name == selectedPoint.name }
 
             if (pointIndex != -1) {
-                val updatedPoint = currentPoints[pointIndex].copy(audioUri = audioUri)
+                val updatedPoint = currentPoints[pointIndex].copy(audioUri = localUri)
                 currentPoints[pointIndex] = updatedPoint
                 _currentSessionPoints.value = currentPoints
-                println("DEBUG: Audio zugeordnet zu ${selectedPoint.name}")
+                println("DEBUG: Audio zugeordnet zu ${selectedPoint.name} - Lokale URI: $localUri")
                 _message.value = "Audio für ${selectedPoint.name} zugeordnet"
 
                 viewModelScope.launch {
@@ -337,9 +365,16 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
         }
         closeAudioDialog()
     }
-
     fun saveAudioToPointById(audioUri: String, pointName: String) {
         println("DEBUG: saveAudioToPointById aufgerufen - URI: $audioUri, Name: $pointName")
+
+        // Kopiere Audio in App-Speicher
+        val localUri = copyAudioToAppStorage(audioUri)
+
+        if (localUri == null) {
+            println("DEBUG: FEHLER beim Kopieren der Audio-Datei")
+            return
+        }
 
         val currentPoints = _currentSessionPoints.value.toMutableList()
         val pointIndex = currentPoints.indexOfFirst { it.name == pointName }
@@ -347,10 +382,10 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
         println("DEBUG: Gefundener Index: $pointIndex, Array-Größe: ${currentPoints.size}")
 
         if (pointIndex != -1) {
-            val updatedPoint = currentPoints[pointIndex].copy(audioUri = audioUri)
+            val updatedPoint = currentPoints[pointIndex].copy(audioUri = localUri)
             currentPoints[pointIndex] = updatedPoint
             _currentSessionPoints.value = currentPoints
-            println("DEBUG: Audio erfolgreich zugeordnet zu ${updatedPoint.name}")
+            println("DEBUG: Audio erfolgreich zugeordnet zu ${updatedPoint.name} - Lokale URI: $localUri")
             _message.value = "Audio für ${updatedPoint.name} zugeordnet"
 
             viewModelScope.launch {
@@ -361,7 +396,6 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             println("DEBUG: FEHLER - Punkt $pointName nicht gefunden!")
         }
     }
-
     fun removeAudioFromPoint() {
         val selectedPoint = _selectedPointForAudio.value
 
@@ -537,11 +571,12 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun nextDeepLearningChallenge() {
+        println("DEBUG: ========== nextDeepLearningChallenge START ==========")
+
         val currentPoints = _currentSessionPoints.value
 
         println("DEBUG: nextDeepLearningChallenge - currentPoints: ${currentPoints.size}")
         println("DEBUG: deepLearningType: ${_deepLearningType.value}")
-
 
         val eligiblePoints = when (_deepLearningType.value) {
             "text" -> currentPoints.filter { it.text != null && it.text.isNotEmpty() }
@@ -549,12 +584,13 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             "both" -> currentPoints.filter {
                 it.text != null && it.text.isNotEmpty() && it.audioUri != null
             }
-
             else -> emptyList()
         }
 
         println("DEBUG: eligiblePoints: ${eligiblePoints.size}")
-
+        eligiblePoints.forEach { point ->
+            println("DEBUG: Punkt ${point.name} - Text: ${point.text != null}, Audio: ${point.audioUri != null}, AudioUri: ${point.audioUri}")
+        }
 
         if (eligiblePoints.isEmpty()) {
             _deepLearningFeedback.value = "Keine passenden Hotspots gefunden!"
@@ -566,58 +602,63 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
         _currentChallengePoint.value = randomPoint
         _deepLearningTasksCurrent.value += 1
 
-        println("DEBUG: Ausgewählter Punkt: ${randomPoint.name}, Text: ${randomPoint.text}")
-
+        println("DEBUG: Ausgewählter Punkt: ${randomPoint.name}, Text: ${randomPoint.text}, Audio: ${randomPoint.audioUri}")
 
         when (_deepLearningType.value) {
             "text" -> {
                 _selectedHotspotText.value = randomPoint.text ?: ""
-                println("DEBUG: selectedHotspotText gesetzt: ${_selectedHotspotText.value}")
+                _currentAudioUri.value = null
+                println("DEBUG: Text-Modus - selectedHotspotText gesetzt: ${_selectedHotspotText.value}")
             }
-
             "audio" -> {
                 _selectedHotspotText.value = ""
-                randomPoint.audioUri?.let { playAudio(it) }
+                _currentAudioUri.value = randomPoint.audioUri
+                println("DEBUG: Audio-Modus - _currentAudioUri.value gesetzt auf: ${_currentAudioUri.value}")
             }
-
             "both" -> {
                 _selectedHotspotText.value = randomPoint.text ?: ""
-                randomPoint.audioUri?.let { playAudio(it) }
+                _currentAudioUri.value = randomPoint.audioUri
+                println("DEBUG: Both-Modus - Text + Audio gesetzt")
             }
-        }
-    }
+        }    }
 
     fun checkDeepLearningAnswer(clickedPoint: DrawPoint) {
         println("DEBUG: checkDeepLearningAnswer aufgerufen - geklickter Punkt: ${clickedPoint.name}")
 
-        val challengePoint = _currentChallengePoint.value ?: return
+        val challengePoint = _currentChallengePoint.value
         println("DEBUG: challengePoint: ${challengePoint?.name}")
 
+        if (challengePoint == null) {
+            println("DEBUG: FEHLER - challengePoint ist NULL!")
+            return
+        }
 
         if (clickedPoint.name == challengePoint.name) {
             _deepLearningCorrect.value += 1
             _deepLearningFeedback.value = "✓ Richtig!"
+            vibrateSuccess()  // HIER HINZUFÜGEN
             println("DEBUG: RICHTIG! correct=${_deepLearningCorrect.value}")
-
         } else {
             _deepLearningWrong.value += 1
             _deepLearningFeedback.value = "✗ Falsch! Richtig wäre: ${challengePoint.name}"
             println("DEBUG: FALSCH! wrong=${_deepLearningWrong.value}")
-
         }
+
+        println("DEBUG: Nach 2 Sekunden - tasksCurrent=${_deepLearningTasksCurrent.value}, tasksTotal=${_deepLearningTasksTotal.value}")
 
         viewModelScope.launch {
             kotlinx.coroutines.delay(2000)
             _deepLearningFeedback.value = ""
 
             if (_deepLearningTasksCurrent.value >= _deepLearningTasksTotal.value) {
+                println("DEBUG: Alle Aufgaben fertig - exitDeepLearningMode")
                 exitDeepLearningMode()
             } else {
+                println("DEBUG: Rufe nextDeepLearningChallenge auf")
                 nextDeepLearningChallenge()
             }
         }
     }
-
     fun exitDeepLearningMode() {
         _showDeepLearningResult.value = true
         _isDeepLearningMode.value = false
@@ -633,5 +674,67 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
         _deepLearningTasksCurrent.value = 0
         _deepLearningCorrect.value = 0
         _deepLearningWrong.value = 0
+    }
+
+    private fun copyAudioToAppStorage(sourceUri: String): String? {
+        return try {
+            val sourceUriParsed = Uri.parse(sourceUri)
+
+            // Erstelle Audio-Ordner falls nicht vorhanden
+            val audioDir = File(getApplication<Application>().filesDir, "audio")
+            if (!audioDir.exists()) {
+                audioDir.mkdirs()
+                println("DEBUG: Audio-Ordner erstellt: ${audioDir.absolutePath}")
+            }
+
+            // Generiere eindeutigen Dateinamen basierend auf Hash
+            val hash = sourceUri.hashCode().toString()
+            val fileName = "hotklick_$hash.m4a"
+            val destFile = File(audioDir, fileName)
+
+            // Prüfe ob Datei bereits existiert
+            if (destFile.exists()) {
+                println("DEBUG: Audio existiert bereits: ${destFile.absolutePath}")
+                return Uri.fromFile(destFile).toString()
+            }
+
+            // Kopiere Datei
+            println("DEBUG: Kopiere Audio von $sourceUri nach ${destFile.absolutePath}")
+            getApplication<Application>().contentResolver.openInputStream(sourceUriParsed)?.use { input ->
+                destFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            println("DEBUG: Audio erfolgreich kopiert")
+            Uri.fromFile(destFile).toString()
+        } catch (e: Exception) {
+            println("DEBUG: Fehler beim Kopieren: ${e.message}")
+            e.printStackTrace()
+            null
+        }
+    }
+
+    private fun vibrateSuccess() {
+        try {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vibratorManager = getApplication<Application>().getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as android.os.VibratorManager
+                vibratorManager.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                getApplication<Application>().getSystemService(android.content.Context.VIBRATOR_SERVICE) as android.os.Vibrator
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(android.os.VibrationEffect.createOneShot(200, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(200)
+            }
+
+            println("DEBUG: Vibration ausgeführt")
+        } catch (e: Exception) {
+            println("DEBUG: Vibration fehlgeschlagen: ${e.message}")
+        }
     }
 }
