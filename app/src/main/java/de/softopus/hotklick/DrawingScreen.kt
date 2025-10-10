@@ -56,6 +56,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material.icons.filled.Edit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,6 +79,11 @@ fun DrawingScreen(
     val isEditMode by viewModel.isEditMode.collectAsState()
     val selectedHotspotText by viewModel.selectedHotspotText.collectAsState()
 
+    val showDeepLearningResult by viewModel.showDeepLearningResult.collectAsState()
+    val showExerciseNameDialog by viewModel.showExerciseNameDialog.collectAsState()
+    val exerciseNameInput by viewModel.exerciseNameInput.collectAsState()
+    val density = LocalDensity.current
+
     LaunchedEffect(selectedHotspotText) {
         println("DEBUG DrawingScreen: selectedHotspotText = '$selectedHotspotText'")
     }
@@ -94,8 +100,6 @@ fun DrawingScreen(
     val deepLearningCorrect by viewModel.deepLearningCorrect.collectAsState()
     val deepLearningWrong by viewModel.deepLearningWrong.collectAsState()
     val deepLearningFeedback by viewModel.deepLearningFeedback.collectAsState()
-    val showDeepLearningResult by viewModel.showDeepLearningResult.collectAsState()
-    val density = LocalDensity.current
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
@@ -105,7 +109,11 @@ fun DrawingScreen(
 
     val currentAudio by viewModel.currentAudioUri.collectAsState()
 
-    LaunchedEffect(currentAudio, isDeepLearningMode, deepLearningTasksCurrent) {  // Counter hinzufügen!
+    LaunchedEffect(
+        currentAudio,
+        isDeepLearningMode,
+        deepLearningTasksCurrent
+    ) {  // Counter hinzufügen!
         println("DEBUG LaunchedEffect: currentAudio=$currentAudio, isDeepLearningMode=$isDeepLearningMode, task=$deepLearningTasksCurrent")
 
         if (isDeepLearningMode && currentAudio != null) {
@@ -199,14 +207,36 @@ fun DrawingScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                if (backgroundImageUri != null && !backgroundImageUri.toString().contains("info_")) {
-                    val fileName = getFileNameFromUri(context, backgroundImageUri.toString())
-                    if (fileName.isNotEmpty()) {
+                val exerciseName by viewModel.exerciseName.collectAsState()
+
+                if (backgroundImageUri != null && !backgroundImageUri.toString()
+                        .contains("info_")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = fileName,
+                            text = exerciseName.ifEmpty { "Übungsname nicht gesetzt" },
                             style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            color = if (exerciseName.isEmpty())
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            else
+                                MaterialTheme.colorScheme.onSurface
                         )
+                        if (isEditMode) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            IconButton(
+                                onClick = { viewModel.openExerciseNameDialog() }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Übungsname bearbeiten"
+                                )
+                            }
+                        }
                     }
                 } else {
                     Text(
@@ -221,7 +251,9 @@ fun DrawingScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         Card(
-            modifier = Modifier.size(canvasWidthDp, canvasHeightDp),            colors = CardDefaults.cardColors(containerColor = Color.White),            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            modifier = Modifier.size(canvasWidthDp, canvasHeightDp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
             println("DEBUG DrawingScreen VOR Canvas: isDeepLearningMode=$isDeepLearningMode")
 
@@ -346,6 +378,14 @@ fun DrawingScreen(
             onStart = { count, type -> viewModel.startDeepLearning(count, type) },
             onDismiss = { viewModel.closeTaskCountDialog() }
         )
+
+        ExerciseNameDialog(
+            showDialog = showExerciseNameDialog,
+            exerciseNameInput = exerciseNameInput,
+            onNameChange = { viewModel.updateExerciseNameInput(it) },
+            onSave = { viewModel.saveExerciseName() },
+            onDismiss = { viewModel.closeExerciseNameDialog() }
+        )
     }
 }
 
@@ -369,7 +409,8 @@ private fun getFileNameFromUri(context: android.content.Context, uriString: Stri
             )?.use { cursor ->
                 println("DEBUG getFileName: Cursor count = ${cursor.count}")
                 if (cursor.moveToFirst()) {
-                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    val nameIndex =
+                        cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
                     println("DEBUG getFileName: nameIndex = $nameIndex")
                     if (nameIndex != -1) {
                         displayName = cursor.getString(nameIndex)
@@ -400,5 +441,7 @@ private fun getFileNameFromUri(context: android.content.Context, uriString: Stri
         return "Fehler"
     }
 }
+
+
 
 

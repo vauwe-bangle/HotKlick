@@ -170,10 +170,12 @@ fun EditModeControls(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Button(
-                onClick = { editImagePickerLauncher.launch("image/*") },
+                onClick = {
+                    println("DEBUG Button: Bild-laden Button geklickt")
+                    editImagePickerLauncher.launch("image/*")
+                },
                 modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null)
+            ) {                Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Bild laden")
             }

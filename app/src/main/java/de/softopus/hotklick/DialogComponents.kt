@@ -475,3 +475,54 @@ fun TaskCountDialog(
         )
     }
 }
+
+@Composable
+fun ExerciseNameDialog(
+    showDialog: Boolean,
+    exerciseNameInput: String,
+    onNameChange: (String) -> Unit,
+    onSave: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = {
+                Text("Übungsname bearbeiten")
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Geben Sie einen Namen für diese Übung ein:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    OutlinedTextField(
+                        value = exerciseNameInput,
+                        onValueChange = onNameChange,
+                        label = { Text("Übungsname") },
+                        placeholder = { Text("z.B. Anatomie Herz") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Dieser Name wird über dem Canvas angezeigt.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = onSave) {
+                    Text("Speichern")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Abbrechen")
+                }
+            }
+        )
+    }
+}

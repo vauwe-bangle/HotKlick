@@ -163,7 +163,8 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             radius = _pointRadius.value,
             imageUri = _backgroundImageUri.value?.toString(),
             text = null,
-            audioUri = null
+            audioUri = null,
+            exerciseName = _exerciseName.value  // NEU
         )
 
         currentPoints.add(newPoint)
@@ -173,20 +174,10 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
         _message.value = "Punkt $pointName erstellt"
 
         viewModelScope.launch {
-            kotlinx.coroutines.delay(2000)
-            _deepLearningFeedback.value = ""
-
-            println("DEBUG: Nach 2 Sekunden - tasksCurrent=${_deepLearningTasksCurrent.value}, tasksTotal=${_deepLearningTasksTotal.value}")
-
-            if (_deepLearningTasksCurrent.value >= _deepLearningTasksTotal.value) {
-                println("DEBUG: Alle Aufgaben fertig - exitDeepLearningMode")
-                exitDeepLearningMode()
-            } else {
-                println("DEBUG: Rufe nextDeepLearningChallenge auf")
-                nextDeepLearningChallenge()
-            }
-        }    }
-
+            kotlinx.coroutines.delay(3000)
+            _message.value = ""
+        }
+    }
     fun deletePoint(pointId: Int, pointName: String) {
         val currentPoints = _currentSessionPoints.value.toMutableList()
         val pointToRemove = currentPoints.find { it.name == pointName }

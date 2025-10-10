@@ -98,17 +98,27 @@ fun HotspotCanvas(
                             }
                         },
                         onLongPress = { offset: Offset ->
-                            if (isEditMode) {
-                                val isInfoImage = backgroundImageUri?.toString()?.contains("info_edit") == true ||
-                                        backgroundImageUri?.toString()?.contains("info_practice") == true
+                            println("DEBUG LongPress: isEditMode=$isEditMode")
+                            println("DEBUG LongPress: backgroundImageUri=$backgroundImageUri")
 
-                                if (backgroundImageUri == null || isInfoImage) {
+                            if (isEditMode) {
+                                val isInfoImage = backgroundImageUri?.toString()?.contains("info_") == true
+                                val hasNoRealImage = backgroundImageUri == null || isInfoImage
+
+                                println("DEBUG LongPress: isInfoImage=$isInfoImage")
+                                println("DEBUG LongPress: hasNoRealImage=$hasNoRealImage")
+
+                                if (hasNoRealImage) {
+                                    println("DEBUG LongPress: Öffne Bild-Picker")
                                     editImagePickerLauncher.launch("image/*")
                                 } else {
+                                    println("DEBUG LongPress: Hotspot-Logik")
                                     val hitPoint = findHitPoint(points, offset)
                                     if (hitPoint != null) {
+                                        println("DEBUG LongPress: Audio-Dialog für ${hitPoint.name}")
                                         viewModel.openAudioDialog(hitPoint)
                                     } else {
+                                        println("DEBUG LongPress: Erstelle neuen Hotspot")
                                         viewModel.addPoint(offset.x, offset.y)
                                     }
                                 }
