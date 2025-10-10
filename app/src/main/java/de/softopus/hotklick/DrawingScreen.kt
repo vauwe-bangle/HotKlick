@@ -186,7 +186,7 @@ fun DrawingScreen(
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // ÜBUNGSNAME - IMMER VORHANDEN (fixe Position)
+        // ÜBUNGSNAME
         Card(
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -200,13 +200,12 @@ fun DrawingScreen(
                 contentAlignment = Alignment.Center
             ) {
                 if (backgroundImageUri != null && !backgroundImageUri.toString().contains("info_")) {
-                    val fileName = getFileNameFromUri(context, backgroundImageUri.toString())  // context hinzufügen!
+                    val fileName = getFileNameFromUri(context, backgroundImageUri.toString())
                     if (fileName.isNotEmpty()) {
                         Text(
                             text = fileName,
                             style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 } else {
@@ -222,8 +221,7 @@ fun DrawingScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         Card(
-            modifier = Modifier.size(canvasWidthDp, canvasHeightDp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            modifier = Modifier.size(canvasWidthDp, canvasHeightDp),            colors = CardDefaults.cardColors(containerColor = Color.White),            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
             println("DEBUG DrawingScreen VOR Canvas: isDeepLearningMode=$isDeepLearningMode")
 
@@ -357,12 +355,11 @@ private fun getFileNameFromUri(context: android.content.Context, uriString: Stri
         println("DEBUG getFileName: URI = $uriString")
         println("DEBUG getFileName: Scheme = ${uri.scheme}")
         println("DEBUG getFileName: Authority = ${uri.authority}")
-        println("DEBUG getFileName: Path = ${uri.path}")
 
         if (uri.scheme == "content") {
             var displayName = ""
 
-            // Versuche DISPLAY_NAME zu holen
+            println("DEBUG getFileName: Starte ContentResolver Query")
             context.contentResolver.query(
                 uri,
                 arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
@@ -376,35 +373,32 @@ private fun getFileNameFromUri(context: android.content.Context, uriString: Stri
                     println("DEBUG getFileName: nameIndex = $nameIndex")
                     if (nameIndex != -1) {
                         displayName = cursor.getString(nameIndex)
-                        println("DEBUG getFileName: DISPLAY_NAME = $displayName")
+                        println("DEBUG getFileName: DISPLAY_NAME = '$displayName'")
                     }
                 }
             }
 
             if (displayName.isNotEmpty()) {
-                // Entferne Dateiendung (.jpg, .png, etc.)
                 val nameWithoutExtension = displayName.substringBeforeLast(".")
-                println("DEBUG getFileName: Ergebnis = $nameWithoutExtension")
+                println("DEBUG getFileName: Ergebnis = '$nameWithoutExtension'")
                 return nameWithoutExtension
             }
 
-            println("DEBUG getFileName: Kein DISPLAY_NAME gefunden")
+            println("DEBUG getFileName: displayName ist leer")
             return "Unbekannte Übung"
         } else if (uri.scheme == "file") {
             val path = uri.path ?: ""
             val fileName = path.substringAfterLast("/")
             return fileName.substringBeforeLast(".")
         } else {
+            println("DEBUG getFileName: Unbekanntes Scheme: ${uri.scheme}")
             return ""
         }
     } catch (e: Exception) {
         println("DEBUG getFileName: Exception = ${e.message}")
         e.printStackTrace()
-        return "Fehler beim Laden"
+        return "Fehler"
     }
 }
-
-
-
 
 

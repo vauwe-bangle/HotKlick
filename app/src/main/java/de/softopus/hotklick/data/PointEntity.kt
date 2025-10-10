@@ -14,7 +14,8 @@ data class PointEntity(
     val radius: Float,
     val imageUri: String? = null,
     val text: String? = null,
-    val audioUri: String? = null // NEU: Audio-Feld hinzugefügt
+    val audioUri: String? = null,
+    val exerciseName: String? = null  // NEU
 )
 
 data class DrawPoint(
@@ -25,5 +26,6 @@ data class DrawPoint(
     val radius: Float = 50f,
     val imageUri: String? = null,
     val text: String? = null,
-    val audioUri: String? = null // NEU: Audio-Feld hinzugefügt
+    val audioUri: String? = null,
+    val exerciseName: String? = null  // NEU
 )

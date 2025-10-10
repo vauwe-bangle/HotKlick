@@ -75,6 +75,15 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
     private val _currentAudioUri = MutableStateFlow<String?>(null)
     val currentAudioUri: StateFlow<String?> = _currentAudioUri.asStateFlow()
 
+    // Übungsname
+    private val _exerciseName = MutableStateFlow<String>("")
+    val exerciseName: StateFlow<String> = _exerciseName.asStateFlow()
+
+    private val _showExerciseNameDialog = MutableStateFlow(false)
+    val showExerciseNameDialog: StateFlow<Boolean> = _showExerciseNameDialog.asStateFlow()
+
+    private val _exerciseNameInput = MutableStateFlow("")
+    val exerciseNameInput: StateFlow<String> = _exerciseNameInput.asStateFlow()
 
     private val imageRadiusMap = mutableMapOf<String?, Float>()
 
@@ -209,15 +218,19 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
                 val savedPoints = repository.getPointsForImageSync(newImageUri)
                 if (savedPoints.isNotEmpty()) {
                     _currentSessionPoints.value = savedPoints
+                    // Lade Übungsname vom ersten Punkt
+                    _exerciseName.value = savedPoints.firstOrNull()?.exerciseName ?: ""
                     _message.value = "Bild geladen - ${savedPoints.size} Punkte"
                 } else {
                     _currentSessionPoints.value = emptyList()
+                    _exerciseName.value = ""  // NEU
                     _message.value = "Neues Bild geladen"
                 }
                 val savedRadius = imageRadiusMap[newImageUri] ?: 50f
                 _pointRadius.value = savedRadius
             } else {
                 _currentSessionPoints.value = emptyList()
+                _exerciseName.value = ""  // NEU
                 _message.value = "Kein Bild"
             }
 
@@ -225,7 +238,6 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             _message.value = ""
         }
     }
-
     fun saveDataAndClearImage() {
         viewModelScope.launch {
             val currentImageUri = _backgroundImageUri.value?.toString()
@@ -735,6 +747,40 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             println("DEBUG: Vibration ausgeführt")
         } catch (e: Exception) {
             println("DEBUG: Vibration fehlgeschlagen: ${e.message}")
+        }
+    }
+
+    // Übungsname Funktionen
+    fun openExerciseNameDialog() {
+        _exerciseNameInput.value = _exerciseName.value
+        _showExerciseNameDialog.value = true
+    }
+
+    fun closeExerciseNameDialog() {
+        _showExerciseNameDialog.value = false
+    }
+
+    fun updateExerciseNameInput(name: String) {
+        _exerciseNameInput.value = name
+    }
+
+    fun saveExerciseName() {
+        val newName = _exerciseNameInput.value.trim()
+        _exerciseName.value = newName
+
+        // Speichere Namen in allen Punkten des aktuellen Bildes
+        val currentPoints = _currentSessionPoints.value.toMutableList()
+        val updatedPoints = currentPoints.map { point ->
+            point.copy(exerciseName = newName)
+        }
+        _currentSessionPoints.value = updatedPoints
+
+        closeExerciseNameDialog()
+        _message.value = "Übungsname gespeichert"
+
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(2000)
+            _message.value = ""
         }
     }
 }

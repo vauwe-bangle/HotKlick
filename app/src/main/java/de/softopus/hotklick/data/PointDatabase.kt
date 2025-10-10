@@ -8,7 +8,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [PointEntity::class],
-    version = 3, // NEU: Version von 2 auf 3 erhöht für audioUri-Feld
+    version = 4, // NEU: Version von 3 auf 4 erhöht für audioUri-Feld
     exportSchema = false
 )
 abstract class PointDatabase : RoomDatabase() {
@@ -23,9 +23,9 @@ abstract class PointDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     PointDatabase::class.java,
-                    "point_database_v6" // NEU: DB-Name aktualisiert für Audio-Feature
+                    "point_database"
                 )
-                    .fallbackToDestructiveMigration() // Bei Problemen alles löschen
+                    .fallbackToDestructiveMigration()  // NEU
                     .build()
                 INSTANCE = instance
                 instance
