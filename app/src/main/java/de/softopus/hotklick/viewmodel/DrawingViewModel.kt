@@ -131,8 +131,17 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
 
 
     init {
+        // NEU - URI Monitor
+        viewModelScope.launch {
+            _backgroundImageUri.collect { uri ->
+                println("DEBUG URI CHANGED TO: $uri")
+                println("DEBUG Called from: ${Exception().stackTrace.take(10).joinToString("\n")}")
+            }
+        }
+
         val database = PointDatabase.getDatabase(application)
         repository = PointRepository(database.pointDao())
+
 
         // Lade Standard-Infobild beim Start (Übungsmodus)
         val infoImageUri =
@@ -144,6 +153,9 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
 
 
     fun loadInfoImage(isEditMode: Boolean) {
+        println("DEBUG loadInfoImage: AUFGERUFEN! isEditMode=$isEditMode")
+        println("DEBUG loadInfoImage: StackTrace = ${Thread.currentThread().stackTrace.take(5).joinToString("\n")}")
+
         val imageName = if (isEditMode) "info_edit" else "info_practice"
         val infoImageUri =
             Uri.parse("android.resource://${getApplication<Application>().packageName}/drawable/$imageName")
@@ -178,6 +190,7 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             _message.value = ""
         }
     }
+
     fun deletePoint(pointId: Int, pointName: String) {
         val currentPoints = _currentSessionPoints.value.toMutableList()
         val pointToRemove = currentPoints.find { it.name == pointName }
@@ -199,10 +212,15 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setBackgroundImage(uri: Uri?) {
+        println("DEBUG setBackgroundImage: URI = $uri")
+        println("DEBUG setBackgroundImage: Called from: ${Thread.currentThread().stackTrace[3]}")
         viewModelScope.launch {
             val previousImageUri = _backgroundImageUri.value?.toString()
             imageRadiusMap[previousImageUri] = _pointRadius.value
-            _backgroundImageUri.value = uri
+
+            _backgroundImageUri.value = uri  // HIER
+            println("DEBUG setBackgroundImage: _backgroundImageUri.value gesetzt auf = ${_backgroundImageUri.value}")
+
             val newImageUri = uri?.toString()
 
             if (uri != null) {
@@ -229,6 +247,7 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             _message.value = ""
         }
     }
+
     fun saveDataAndClearImage() {
         viewModelScope.launch {
             val currentImageUri = _backgroundImageUri.value?.toString()
@@ -368,6 +387,7 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
         }
         closeAudioDialog()
     }
+
     fun saveAudioToPointById(audioUri: String, pointName: String) {
         println("DEBUG: saveAudioToPointById aufgerufen - URI: $audioUri, Name: $pointName")
 
@@ -399,6 +419,7 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             println("DEBUG: FEHLER - Punkt $pointName nicht gefunden!")
         }
     }
+
     fun removeAudioFromPoint() {
         val selectedPoint = _selectedPointForAudio.value
 
@@ -452,6 +473,9 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun toggleToEditMode() {
+        println("DEBUG toggleToEditMode: CALLED")
+        println("DEBUG toggleToEditMode: _isEditMode.value = ${_isEditMode.value}")
+
         if (!_isEditMode.value) {
             _isEditMode.value = true
             closeTextDialog()
@@ -461,9 +485,16 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             _selectedHotspotName.value = ""
             stopAudio()
 
-            // GEÄNDERT: Lade IMMER Editiermodus-Infobild beim Wechsel
-            loadInfoImage(true)
+            // GEÄNDERT: Prüfe nur die URI, nicht die Punkte!
+            val currentUri = _backgroundImageUri.value?.toString()
+            val isInfoImage = currentUri == null || currentUri.contains("info_")
 
+            if (isInfoImage) {
+                println("DEBUG toggleToEditMode: Lade Infobild")
+                loadInfoImage(true)
+            } else {
+                println("DEBUG toggleToEditMode: Behalte echtes Bild")
+            }
             _message.value = "Editiermodus aktiviert"
 
             viewModelScope.launch {
@@ -482,8 +513,13 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             _selectedHotspotText.value = ""
             _selectedHotspotName.value = ""
 
-            // GEÄNDERT: Lade IMMER Übungsmodus-Infobild beim Wechsel
-            loadInfoImage(false)
+            // GEÄNDERT: Prüfe nur die URI, nicht die Punkte!
+            val currentUri = _backgroundImageUri.value?.toString()
+            val isInfoImage = currentUri == null || currentUri.contains("info_")
+
+            if (isInfoImage) {
+                loadInfoImage(false)
+            }
 
             _message.value = "Übungsmodus aktiviert"
 
@@ -493,285 +529,297 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             }
         }
     }
-
-    fun showHotspotText(point: DrawPoint) {
-        if (!_isEditMode.value) {  // <-- Diese Bedingung blockiert im Vertiefungsmodus!
-            _selectedHotspotName.value = point.name
-            if (point.text != null && point.text.isNotEmpty()) {
-                _selectedHotspotText.value = point.text
-            } else {
-                _selectedHotspotText.value = "Kein Text verfügbar."
-            }
-        }
-    }
-
-    fun playAudio(audioUri: String) {
-        _currentAudioUri.value = audioUri
-        _isPlayingAudio.value = true
-    }
-
-    fun stopAudio() {
-        _isPlayingAudio.value = false
-        _currentAudioUri.value = null
-    }
-
-    fun clearHotspotText() {
-        _selectedHotspotText.value = ""
-        _selectedHotspotName.value = ""
-        stopAudio()
-    }
-
-    // Vertiefungsmodus Funktionen
-    fun toggleDeepLearningButtons() {
-        _showDeepLearningButtons.value = !_showDeepLearningButtons.value
-    }
-
-    fun hideDeepLearningButtons() {
-        _showDeepLearningButtons.value = false
-    }
-
-    fun openTaskCountDialog(type: String) {
-        _selectedDeepLearningType.value = type
-        _showTaskCountDialog.value = true
-    }
-
-    fun closeTaskCountDialog() {
-        _showTaskCountDialog.value = false
-        _selectedDeepLearningType.value = null
-    }
-
-    fun startDeepLearning(taskCount: Int, type: String) {
-        println("DEBUG: startDeepLearning ANFANG - taskCount=$taskCount, type=$type")
-
-        val isInfoImage = _backgroundImageUri.value?.toString()?.contains("info_") == true
-
-        if (_currentSessionPoints.value.isEmpty() || isInfoImage) {
-            println("DEBUG: VORZEITIGER EXIT - isEmpty oder isInfoImage")
-            _message.value = "Bitte laden Sie zuerst ein Bild mit Hotspots!"
-            closeTaskCountDialog()
-
-            viewModelScope.launch {
-                kotlinx.coroutines.delay(3000)
-                _message.value = ""
-            }
-            return
-        }
-
-        println("DEBUG: Setze isDeepLearningMode = true")
-        _isDeepLearningMode.value = true
-        println("DEBUG: isDeepLearningMode ist jetzt: ${_isDeepLearningMode.value}")
-
-        _showDeepLearningButtons.value = false
-        _deepLearningType.value = type
-        _deepLearningTasksTotal.value = taskCount
-        _deepLearningTasksCurrent.value = 0
-        _deepLearningCorrect.value = 0
-        _deepLearningWrong.value = 0
-        _deepLearningFeedback.value = ""
-        closeTaskCountDialog()
-
-        nextDeepLearningChallenge()
-    }
-
-    fun nextDeepLearningChallenge() {
-        println("DEBUG: ========== nextDeepLearningChallenge START ==========")
-
-        val currentPoints = _currentSessionPoints.value
-
-        println("DEBUG: nextDeepLearningChallenge - currentPoints: ${currentPoints.size}")
-        println("DEBUG: deepLearningType: ${_deepLearningType.value}")
-
-        val eligiblePoints = when (_deepLearningType.value) {
-            "text" -> currentPoints.filter { it.text != null && it.text.isNotEmpty() }
-            "audio" -> currentPoints.filter { it.audioUri != null }
-            "both" -> currentPoints.filter {
-                it.text != null && it.text.isNotEmpty() && it.audioUri != null
-            }
-            else -> emptyList()
-        }
-
-        println("DEBUG: eligiblePoints: ${eligiblePoints.size}")
-        eligiblePoints.forEach { point ->
-            println("DEBUG: Punkt ${point.name} - Text: ${point.text != null}, Audio: ${point.audioUri != null}, AudioUri: ${point.audioUri}")
-        }
-
-        if (eligiblePoints.isEmpty()) {
-            _deepLearningFeedback.value = "Keine passenden Hotspots gefunden!"
-            exitDeepLearningMode()
-            return
-        }
-
-        val randomPoint = eligiblePoints.random()
-        _currentChallengePoint.value = randomPoint
-        _deepLearningTasksCurrent.value += 1
-
-        println("DEBUG: Ausgewählter Punkt: ${randomPoint.name}, Text: ${randomPoint.text}, Audio: ${randomPoint.audioUri}")
-
-        when (_deepLearningType.value) {
-            "text" -> {
-                _selectedHotspotText.value = randomPoint.text ?: ""
-                _currentAudioUri.value = null
-                println("DEBUG: Text-Modus - selectedHotspotText gesetzt: ${_selectedHotspotText.value}")
-            }
-            "audio" -> {
-                _selectedHotspotText.value = ""
-                _currentAudioUri.value = randomPoint.audioUri
-                println("DEBUG: Audio-Modus - _currentAudioUri.value gesetzt auf: ${_currentAudioUri.value}")
-            }
-            "both" -> {
-                _selectedHotspotText.value = randomPoint.text ?: ""
-                _currentAudioUri.value = randomPoint.audioUri
-                println("DEBUG: Both-Modus - Text + Audio gesetzt")
-            }
-        }    }
-
-    fun checkDeepLearningAnswer(clickedPoint: DrawPoint) {
-        println("DEBUG: checkDeepLearningAnswer aufgerufen - geklickter Punkt: ${clickedPoint.name}")
-
-        val challengePoint = _currentChallengePoint.value
-        println("DEBUG: challengePoint: ${challengePoint?.name}")
-
-        if (challengePoint == null) {
-            println("DEBUG: FEHLER - challengePoint ist NULL!")
-            return
-        }
-
-        if (clickedPoint.name == challengePoint.name) {
-            _deepLearningCorrect.value += 1
-            _deepLearningFeedback.value = "✓ Richtig!"
-            vibrateSuccess()  // HIER HINZUFÜGEN
-            println("DEBUG: RICHTIG! correct=${_deepLearningCorrect.value}")
-        } else {
-            _deepLearningWrong.value += 1
-            _deepLearningFeedback.value = "✗ Falsch! Richtig wäre: ${challengePoint.name}"
-            println("DEBUG: FALSCH! wrong=${_deepLearningWrong.value}")
-        }
-
-        println("DEBUG: Nach 2 Sekunden - tasksCurrent=${_deepLearningTasksCurrent.value}, tasksTotal=${_deepLearningTasksTotal.value}")
-
-        viewModelScope.launch {
-            kotlinx.coroutines.delay(2000)
-            _deepLearningFeedback.value = ""
-
-            if (_deepLearningTasksCurrent.value >= _deepLearningTasksTotal.value) {
-                println("DEBUG: Alle Aufgaben fertig - exitDeepLearningMode")
-                exitDeepLearningMode()
-            } else {
-                println("DEBUG: Rufe nextDeepLearningChallenge auf")
-                nextDeepLearningChallenge()
-            }
-        }
-    }
-    fun exitDeepLearningMode() {
-        _showDeepLearningResult.value = true
-        _isDeepLearningMode.value = false
-        _currentChallengePoint.value = null
-        _selectedHotspotText.value = ""
-        stopAudio()
-    }
-
-    fun backToOverview() {
-        _showDeepLearningResult.value = false
-        _deepLearningType.value = null
-        _deepLearningTasksTotal.value = 0
-        _deepLearningTasksCurrent.value = 0
-        _deepLearningCorrect.value = 0
-        _deepLearningWrong.value = 0
-    }
-
-    private fun copyAudioToAppStorage(sourceUri: String): String? {
-        return try {
-            val sourceUriParsed = Uri.parse(sourceUri)
-
-            // Erstelle Audio-Ordner falls nicht vorhanden
-            val audioDir = File(getApplication<Application>().filesDir, "audio")
-            if (!audioDir.exists()) {
-                audioDir.mkdirs()
-                println("DEBUG: Audio-Ordner erstellt: ${audioDir.absolutePath}")
-            }
-
-            // Generiere eindeutigen Dateinamen basierend auf Hash
-            val hash = sourceUri.hashCode().toString()
-            val fileName = "hotklick_$hash.m4a"
-            val destFile = File(audioDir, fileName)
-
-            // Prüfe ob Datei bereits existiert
-            if (destFile.exists()) {
-                println("DEBUG: Audio existiert bereits: ${destFile.absolutePath}")
-                return Uri.fromFile(destFile).toString()
-            }
-
-            // Kopiere Datei
-            println("DEBUG: Kopiere Audio von $sourceUri nach ${destFile.absolutePath}")
-            getApplication<Application>().contentResolver.openInputStream(sourceUriParsed)?.use { input ->
-                destFile.outputStream().use { output ->
-                    input.copyTo(output)
+        fun showHotspotText(point: DrawPoint) {
+            if (!_isEditMode.value) {  // <-- Diese Bedingung blockiert im Vertiefungsmodus!
+                _selectedHotspotName.value = point.name
+                if (point.text != null && point.text.isNotEmpty()) {
+                    _selectedHotspotText.value = point.text
+                } else {
+                    _selectedHotspotText.value = "Kein Text verfügbar."
                 }
             }
-
-            println("DEBUG: Audio erfolgreich kopiert")
-            Uri.fromFile(destFile).toString()
-        } catch (e: Exception) {
-            println("DEBUG: Fehler beim Kopieren: ${e.message}")
-            e.printStackTrace()
-            null
         }
-    }
 
-    private fun vibrateSuccess() {
-        try {
-            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val vibratorManager = getApplication<Application>().getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as android.os.VibratorManager
-                vibratorManager.defaultVibrator
-            } else {
-                @Suppress("DEPRECATION")
-                getApplication<Application>().getSystemService(android.content.Context.VIBRATOR_SERVICE) as android.os.Vibrator
+        fun playAudio(audioUri: String) {
+            _currentAudioUri.value = audioUri
+            _isPlayingAudio.value = true
+        }
+
+        fun stopAudio() {
+            _isPlayingAudio.value = false
+            _currentAudioUri.value = null
+        }
+
+        fun clearHotspotText() {
+            _selectedHotspotText.value = ""
+            _selectedHotspotName.value = ""
+            stopAudio()
+        }
+
+        // Vertiefungsmodus Funktionen
+        fun toggleDeepLearningButtons() {
+            _showDeepLearningButtons.value = !_showDeepLearningButtons.value
+        }
+
+        fun hideDeepLearningButtons() {
+            _showDeepLearningButtons.value = false
+        }
+
+        fun openTaskCountDialog(type: String) {
+            _selectedDeepLearningType.value = type
+            _showTaskCountDialog.value = true
+        }
+
+        fun closeTaskCountDialog() {
+            _showTaskCountDialog.value = false
+            _selectedDeepLearningType.value = null
+        }
+
+        fun startDeepLearning(taskCount: Int, type: String) {
+            println("DEBUG: startDeepLearning ANFANG - taskCount=$taskCount, type=$type")
+
+            val isInfoImage = _backgroundImageUri.value?.toString()?.contains("info_") == true
+
+            if (_currentSessionPoints.value.isEmpty() || isInfoImage) {
+                println("DEBUG: VORZEITIGER EXIT - isEmpty oder isInfoImage")
+                _message.value = "Bitte laden Sie zuerst ein Bild mit Hotspots!"
+                closeTaskCountDialog()
+
+                viewModelScope.launch {
+                    kotlinx.coroutines.delay(3000)
+                    _message.value = ""
+                }
+                return
             }
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(android.os.VibrationEffect.createOneShot(200, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator.vibrate(200)
+            println("DEBUG: Setze isDeepLearningMode = true")
+            _isDeepLearningMode.value = true
+            println("DEBUG: isDeepLearningMode ist jetzt: ${_isDeepLearningMode.value}")
+
+            _showDeepLearningButtons.value = false
+            _deepLearningType.value = type
+            _deepLearningTasksTotal.value = taskCount
+            _deepLearningTasksCurrent.value = 0
+            _deepLearningCorrect.value = 0
+            _deepLearningWrong.value = 0
+            _deepLearningFeedback.value = ""
+            closeTaskCountDialog()
+
+            nextDeepLearningChallenge()
+        }
+
+        fun nextDeepLearningChallenge() {
+            println("DEBUG: ========== nextDeepLearningChallenge START ==========")
+
+            val currentPoints = _currentSessionPoints.value
+
+            println("DEBUG: nextDeepLearningChallenge - currentPoints: ${currentPoints.size}")
+            println("DEBUG: deepLearningType: ${_deepLearningType.value}")
+
+            val eligiblePoints = when (_deepLearningType.value) {
+                "text" -> currentPoints.filter { it.text != null && it.text.isNotEmpty() }
+                "audio" -> currentPoints.filter { it.audioUri != null }
+                "both" -> currentPoints.filter {
+                    it.text != null && it.text.isNotEmpty() && it.audioUri != null
+                }
+
+                else -> emptyList()
             }
 
-            println("DEBUG: Vibration ausgeführt")
-        } catch (e: Exception) {
-            println("DEBUG: Vibration fehlgeschlagen: ${e.message}")
+            println("DEBUG: eligiblePoints: ${eligiblePoints.size}")
+            eligiblePoints.forEach { point ->
+                println("DEBUG: Punkt ${point.name} - Text: ${point.text != null}, Audio: ${point.audioUri != null}, AudioUri: ${point.audioUri}")
+            }
+
+            if (eligiblePoints.isEmpty()) {
+                _deepLearningFeedback.value = "Keine passenden Hotspots gefunden!"
+                exitDeepLearningMode()
+                return
+            }
+
+            val randomPoint = eligiblePoints.random()
+            _currentChallengePoint.value = randomPoint
+            _deepLearningTasksCurrent.value += 1
+
+            println("DEBUG: Ausgewählter Punkt: ${randomPoint.name}, Text: ${randomPoint.text}, Audio: ${randomPoint.audioUri}")
+
+            when (_deepLearningType.value) {
+                "text" -> {
+                    _selectedHotspotText.value = randomPoint.text ?: ""
+                    _currentAudioUri.value = null
+                    println("DEBUG: Text-Modus - selectedHotspotText gesetzt: ${_selectedHotspotText.value}")
+                }
+
+                "audio" -> {
+                    _selectedHotspotText.value = ""
+                    _currentAudioUri.value = randomPoint.audioUri
+                    println("DEBUG: Audio-Modus - _currentAudioUri.value gesetzt auf: ${_currentAudioUri.value}")
+                }
+
+                "both" -> {
+                    _selectedHotspotText.value = randomPoint.text ?: ""
+                    _currentAudioUri.value = randomPoint.audioUri
+                    println("DEBUG: Both-Modus - Text + Audio gesetzt")
+                }
+            }
+        }
+
+        fun checkDeepLearningAnswer(clickedPoint: DrawPoint) {
+            println("DEBUG: checkDeepLearningAnswer aufgerufen - geklickter Punkt: ${clickedPoint.name}")
+
+            val challengePoint = _currentChallengePoint.value
+            println("DEBUG: challengePoint: ${challengePoint?.name}")
+
+            if (challengePoint == null) {
+                println("DEBUG: FEHLER - challengePoint ist NULL!")
+                return
+            }
+
+            if (clickedPoint.name == challengePoint.name) {
+                _deepLearningCorrect.value += 1
+                _deepLearningFeedback.value = "✓ Richtig!"
+                vibrateSuccess()  // HIER HINZUFÜGEN
+                println("DEBUG: RICHTIG! correct=${_deepLearningCorrect.value}")
+            } else {
+                _deepLearningWrong.value += 1
+                _deepLearningFeedback.value = "✗ Falsch! Richtig wäre: ${challengePoint.name}"
+                println("DEBUG: FALSCH! wrong=${_deepLearningWrong.value}")
+            }
+
+            println("DEBUG: Nach 2 Sekunden - tasksCurrent=${_deepLearningTasksCurrent.value}, tasksTotal=${_deepLearningTasksTotal.value}")
+
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(2000)
+                _deepLearningFeedback.value = ""
+
+                if (_deepLearningTasksCurrent.value >= _deepLearningTasksTotal.value) {
+                    println("DEBUG: Alle Aufgaben fertig - exitDeepLearningMode")
+                    exitDeepLearningMode()
+                } else {
+                    println("DEBUG: Rufe nextDeepLearningChallenge auf")
+                    nextDeepLearningChallenge()
+                }
+            }
+        }
+
+        fun exitDeepLearningMode() {
+            _showDeepLearningResult.value = true
+            _isDeepLearningMode.value = false
+            _currentChallengePoint.value = null
+            _selectedHotspotText.value = ""
+            stopAudio()
+        }
+
+        fun backToOverview() {
+            _showDeepLearningResult.value = false
+            _deepLearningType.value = null
+            _deepLearningTasksTotal.value = 0
+            _deepLearningTasksCurrent.value = 0
+            _deepLearningCorrect.value = 0
+            _deepLearningWrong.value = 0
+        }
+
+        private fun copyAudioToAppStorage(sourceUri: String): String? {
+            return try {
+                val sourceUriParsed = Uri.parse(sourceUri)
+
+                // Erstelle Audio-Ordner falls nicht vorhanden
+                val audioDir = File(getApplication<Application>().filesDir, "audio")
+                if (!audioDir.exists()) {
+                    audioDir.mkdirs()
+                    println("DEBUG: Audio-Ordner erstellt: ${audioDir.absolutePath}")
+                }
+
+                // Generiere eindeutigen Dateinamen basierend auf Hash
+                val hash = sourceUri.hashCode().toString()
+                val fileName = "hotklick_$hash.m4a"
+                val destFile = File(audioDir, fileName)
+
+                // Prüfe ob Datei bereits existiert
+                if (destFile.exists()) {
+                    println("DEBUG: Audio existiert bereits: ${destFile.absolutePath}")
+                    return Uri.fromFile(destFile).toString()
+                }
+
+                // Kopiere Datei
+                println("DEBUG: Kopiere Audio von $sourceUri nach ${destFile.absolutePath}")
+                getApplication<Application>().contentResolver.openInputStream(sourceUriParsed)
+                    ?.use { input ->
+                        destFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+
+                println("DEBUG: Audio erfolgreich kopiert")
+                Uri.fromFile(destFile).toString()
+            } catch (e: Exception) {
+                println("DEBUG: Fehler beim Kopieren: ${e.message}")
+                e.printStackTrace()
+                null
+            }
+        }
+
+        private fun vibrateSuccess() {
+            try {
+                val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val vibratorManager =
+                        getApplication<Application>().getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as android.os.VibratorManager
+                    vibratorManager.defaultVibrator
+                } else {
+                    @Suppress("DEPRECATION")
+                    getApplication<Application>().getSystemService(android.content.Context.VIBRATOR_SERVICE) as android.os.Vibrator
+                }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator.vibrate(
+                        android.os.VibrationEffect.createOneShot(
+                            200,
+                            android.os.VibrationEffect.DEFAULT_AMPLITUDE
+                        )
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(200)
+                }
+
+                println("DEBUG: Vibration ausgeführt")
+            } catch (e: Exception) {
+                println("DEBUG: Vibration fehlgeschlagen: ${e.message}")
+            }
+        }
+
+        // Übungsname Funktionen
+        fun openExerciseNameDialog() {
+            _exerciseNameInput.value = _exerciseName.value
+            _showExerciseNameDialog.value = true
+        }
+
+        fun closeExerciseNameDialog() {
+            _showExerciseNameDialog.value = false
+        }
+
+        fun updateExerciseNameInput(name: String) {
+            _exerciseNameInput.value = name
+        }
+
+        fun saveExerciseName() {
+            val newName = _exerciseNameInput.value.trim()
+            _exerciseName.value = newName
+
+            // Speichere Namen in allen Punkten des aktuellen Bildes
+            val currentPoints = _currentSessionPoints.value.toMutableList()
+            val updatedPoints = currentPoints.map { point ->
+                point.copy(exerciseName = newName)
+            }
+            _currentSessionPoints.value = updatedPoints
+
+            closeExerciseNameDialog()
+            _message.value = "Übungsname gespeichert"
+
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(2000)
+                _message.value = ""
+            }
         }
     }
 
-    // Übungsname Funktionen
-    fun openExerciseNameDialog() {
-        _exerciseNameInput.value = _exerciseName.value
-        _showExerciseNameDialog.value = true
-    }
-
-    fun closeExerciseNameDialog() {
-        _showExerciseNameDialog.value = false
-    }
-
-    fun updateExerciseNameInput(name: String) {
-        _exerciseNameInput.value = name
-    }
-
-    fun saveExerciseName() {
-        val newName = _exerciseNameInput.value.trim()
-        _exerciseName.value = newName
-
-        // Speichere Namen in allen Punkten des aktuellen Bildes
-        val currentPoints = _currentSessionPoints.value.toMutableList()
-        val updatedPoints = currentPoints.map { point ->
-            point.copy(exerciseName = newName)
-        }
-        _currentSessionPoints.value = updatedPoints
-
-        closeExerciseNameDialog()
-        _message.value = "Übungsname gespeichert"
-
-        viewModelScope.launch {
-            kotlinx.coroutines.delay(2000)
-            _message.value = ""
-        }
-    }
-}

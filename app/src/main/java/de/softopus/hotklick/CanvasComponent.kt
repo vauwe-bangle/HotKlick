@@ -38,6 +38,7 @@ fun HotspotCanvas(
     practiceImagePickerLauncher: ManagedActivityResultLauncher<String, Uri?>,
     context: android.content.Context
 ) {
+    println("DEBUG HotspotCanvas: Received backgroundImageUri = $backgroundImageUri")
     Box(modifier = Modifier.fillMaxSize()) {
         if (backgroundImageUri != null) {
             AsyncImage(
@@ -51,7 +52,7 @@ fun HotspotCanvas(
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(points, pointRadius, isEditMode, isDeepLearningMode) {  // <-- HINZUGEFÜGT
+                .pointerInput(points, pointRadius, isEditMode, isDeepLearningMode, backgroundImageUri) {  // <-- HINZUGEFÜGT
                     detectTapGestures(
                         onTap = { offset: Offset ->
                             val hitPoint = findHitPoint(points, offset)
@@ -98,6 +99,8 @@ fun HotspotCanvas(
                             }
                         },
                         onLongPress = { offset: Offset ->
+                            println("DEBUG Canvas: Long-Press erkannt, isEditMode=$isEditMode")
+                            println("DEBUG ===== LONGPRESS START =====")
                             println("DEBUG LongPress: isEditMode=$isEditMode")
                             println("DEBUG LongPress: backgroundImageUri=$backgroundImageUri")
 
@@ -122,11 +125,12 @@ fun HotspotCanvas(
                                         viewModel.addPoint(offset.x, offset.y)
                                     }
                                 }
+                                println("DEBUG ===== LONGPRESS ENDE =====")
                             } else {
                                 practiceImagePickerLauncher.launch("image/*")
+                                println("DEBUG ===== LONGPRESS ENDE (Practice) =====")
                             }
-                        },
-                        onDoubleTap = { offset: Offset ->
+                        },                        onDoubleTap = { offset: Offset ->
                             if (isEditMode) {
                                 val hitPoint = findHitPoint(points, offset)
                                 hitPoint?.let { point ->

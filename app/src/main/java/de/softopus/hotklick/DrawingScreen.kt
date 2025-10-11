@@ -167,13 +167,16 @@ fun DrawingScreen(
     val editImagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
+        println("DEBUG ImagePicker: URI empfangen = $uri")
         viewModel.setBackgroundImage(uri)
+        println("DEBUG ImagePicker: setBackgroundImage aufgerufen")
     }
-
     val practiceImagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
+        println("DEBUG PracticeImagePicker: URI empfangen = $uri")
         viewModel.setBackgroundImage(uri)
+        println("DEBUG PracticeImagePicker: setBackgroundImage aufgerufen")
     }
 
     val audioPickerLauncher = rememberLauncherForActivityResult(
