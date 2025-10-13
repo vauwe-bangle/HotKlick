@@ -5,4 +5,4 @@ Hotspots are assigned to an image, and these hotspots contain associated text an
 
 
 
-![Beschreibung der Modi](./Modus-Hotklick.png)
+![Beschreibung der Modi](./Modi-Import-Export.png)
