@@ -214,6 +214,7 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
     fun setBackgroundImage(uri: Uri?) {
         println("DEBUG setBackgroundImage: URI = $uri")
         println("DEBUG setBackgroundImage: Called from: ${Thread.currentThread().stackTrace[3]}")
+
         viewModelScope.launch {
             val previousImageUri = _backgroundImageUri.value?.toString()
             imageRadiusMap[previousImageUri] = _pointRadius.value
@@ -222,13 +223,20 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             println("DEBUG setBackgroundImage: _backgroundImageUri.value gesetzt auf = ${_backgroundImageUri.value}")
 
             val newImageUri = uri?.toString()
+            println("DEBUG LOAD: Suche Punkte für imageUri='$newImageUri'")  // NEU
 
             if (uri != null) {
                 val savedPoints = repository.getPointsForImageSync(newImageUri)
+                println("DEBUG LOAD: Gefundene Punkte: ${savedPoints.size}")  // NEU
                 if (savedPoints.isNotEmpty()) {
+                    println("DEBUG LOAD: Geladene Punkte:")
+                    savedPoints.forEach { point ->
+                        println("DEBUG LOAD: Punkt ${point.name}, exerciseName='${point.exerciseName}'")
+                    }
                     _currentSessionPoints.value = savedPoints
                     // Lade Übungsname vom ersten Punkt
                     _exerciseName.value = savedPoints.firstOrNull()?.exerciseName ?: ""
+                    println("DEBUG LOAD: _exerciseName gesetzt auf: '${_exerciseName.value}'")
                     _message.value = "Bild geladen - ${savedPoints.size} Punkte"
                 } else {
                     _currentSessionPoints.value = emptyList()
@@ -257,7 +265,13 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
                 try {
                     repository.deleteAllPointsForImage(currentImageUri)
                     currentPoints.forEach { point ->
-                        repository.insertPoint(point.copy(imageUri = currentImageUri))
+                        // NEU: Stelle sicher, dass exerciseName gesetzt ist
+                        val pointWithName = point.copy(
+                            imageUri = currentImageUri,
+                            exerciseName = _exerciseName.value  // Explizit setzen
+                        )
+                        println("DEBUG SAVE: Speichere Punkt ${point.name} mit exerciseName='${pointWithName.exerciseName}'")
+                        repository.insertPoint(pointWithName)
                     }
                     _message.value = "${currentPoints.size} Punkte gespeichert"
                 } catch (e: Exception) {
@@ -275,7 +289,6 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             _message.value = ""
         }
     }
-
     fun increasePointRadius() {
         val currentRadius = _pointRadius.value
         if (currentRadius < 180f) {

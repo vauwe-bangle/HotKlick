@@ -20,7 +20,8 @@ class PointRepository(private val pointDao: PointDao) {
                     radius = entity.radius,
                     imageUri = entity.imageUri,
                     text = entity.text,
-                    audioUri = entity.audioUri // NEU: audioUri-Mapping hinzugefügt
+                    audioUri = entity.audioUri, // NEU: audioUri-Mapping hinzugefügt
+                    exerciseName = entity.exerciseName  // NEU: exerciseName-Mapping hinzugefügt
                 )
             }
         }
@@ -36,7 +37,8 @@ class PointRepository(private val pointDao: PointDao) {
                 radius = entity.radius,
                 imageUri = entity.imageUri,
                 text = entity.text,
-                audioUri = entity.audioUri // NEU: audioUri-Mapping hinzugefügt
+                audioUri = entity.audioUri, // NEU: audioUri-Mapping hinzugefügt
+                exerciseName = entity.exerciseName  // NEU: exerciseName-Mapping hinzugefügt
             )
         }
     }
@@ -49,7 +51,8 @@ class PointRepository(private val pointDao: PointDao) {
             radius = point.radius,
             imageUri = point.imageUri,
             text = point.text,
-            audioUri = point.audioUri // NEU: audioUri-Mapping hinzugefügt
+            audioUri = point.audioUri, // NEU: audioUri-Mapping hinzugefügt
+            exerciseName = point.exerciseName  // NEU: exerciseName-Mapping hinzugefügt
         )
         pointDao.insertPoint(entity)
     }
