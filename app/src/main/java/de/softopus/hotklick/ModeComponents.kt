@@ -93,7 +93,8 @@ fun ModeToggleButton(
 fun DeepLearningButtons(
     onTextClick: () -> Unit,
     onAudioClick: () -> Unit,
-    onBothClick: () -> Unit
+    onBothClick: () -> Unit,
+    onBackClick: () -> Unit  // NEU: Parameter hinzufügen
 ) {
     Column {
         Spacer(modifier = Modifier.height(16.dp))
@@ -142,9 +143,20 @@ fun DeepLearningButtons(
                 Text("Beides", fontWeight = FontWeight.Bold)
             }
         }
+
+        // NEU: Zurück-Button
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(
+            onClick = onBackClick,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondary
+            )
+        ) {
+            Text("Zurück zum Übungsmodus", fontWeight = FontWeight.Bold)
+        }
     }
 }
-
 
 // EDITIERMODUS-CONTROLS
 @Composable

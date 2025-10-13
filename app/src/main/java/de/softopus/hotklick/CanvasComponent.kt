@@ -38,7 +38,6 @@ fun HotspotCanvas(
     practiceImagePickerLauncher: ManagedActivityResultLauncher<String, Uri?>,
     context: android.content.Context
 ) {
-    println("DEBUG HotspotCanvas: Received backgroundImageUri = $backgroundImageUri")
     Box(modifier = Modifier.fillMaxSize()) {
         if (backgroundImageUri != null) {
             AsyncImage(
@@ -57,20 +56,15 @@ fun HotspotCanvas(
                         onTap = { offset: Offset ->
                             val hitPoint = findHitPoint(points, offset)
 
-                            println("DEBUG Canvas: Klick erkannt, isDeepLearningMode=$isDeepLearningMode, hitPoint=${hitPoint?.name}")
-
                             if (isEditMode) {
                                 hitPoint?.let {
                                     viewModel.deletePoint(it.id, it.name)
                                 }
                             } else {
                                 if (isDeepLearningMode) {
-                                    println("DEBUG Canvas: Im Vertiefungsmodus")
                                     if (hitPoint != null) {
-                                        println("DEBUG Canvas: Hotspot getroffen: ${hitPoint.name}")
                                         viewModel.checkDeepLearningAnswer(hitPoint)
                                     } else {
-                                        println("DEBUG Canvas: Kein Hotspot getroffen - erstelle Dummy-Point")
                                         // FEHLER-KLICK: Erstelle Dummy-Point für falsche Antwort
                                         val dummyPoint = DrawPoint(
                                             id = -1,
@@ -99,38 +93,24 @@ fun HotspotCanvas(
                             }
                         },
                         onLongPress = { offset: Offset ->
-                            println("DEBUG Canvas: Long-Press erkannt, isEditMode=$isEditMode")
-                            println("DEBUG ===== LONGPRESS START =====")
-                            println("DEBUG LongPress: isEditMode=$isEditMode")
-                            println("DEBUG LongPress: backgroundImageUri=$backgroundImageUri")
-
                             if (isEditMode) {
                                 val isInfoImage = backgroundImageUri?.toString()?.contains("info_") == true
                                 val hasNoRealImage = backgroundImageUri == null || isInfoImage
-
-                                println("DEBUG LongPress: isInfoImage=$isInfoImage")
-                                println("DEBUG LongPress: hasNoRealImage=$hasNoRealImage")
-
                                 if (hasNoRealImage) {
-                                    println("DEBUG LongPress: Öffne Bild-Picker")
                                     editImagePickerLauncher.launch("image/*")
                                 } else {
-                                    println("DEBUG LongPress: Hotspot-Logik")
                                     val hitPoint = findHitPoint(points, offset)
                                     if (hitPoint != null) {
-                                        println("DEBUG LongPress: Audio-Dialog für ${hitPoint.name}")
                                         viewModel.openAudioDialog(hitPoint)
                                     } else {
-                                        println("DEBUG LongPress: Erstelle neuen Hotspot")
                                         viewModel.addPoint(offset.x, offset.y)
                                     }
                                 }
-                                println("DEBUG ===== LONGPRESS ENDE =====")
                             } else {
                                 practiceImagePickerLauncher.launch("image/*")
-                                println("DEBUG ===== LONGPRESS ENDE (Practice) =====")
                             }
-                        },                        onDoubleTap = { offset: Offset ->
+                        },
+                        onDoubleTap = { offset: Offset ->
                             if (isEditMode) {
                                 val hitPoint = findHitPoint(points, offset)
                                 hitPoint?.let { point ->

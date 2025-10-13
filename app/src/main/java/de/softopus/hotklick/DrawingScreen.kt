@@ -301,10 +301,10 @@ fun DrawingScreen(
             DeepLearningButtons(
                 onTextClick = { viewModel.openTaskCountDialog("text") },
                 onAudioClick = { viewModel.openTaskCountDialog("audio") },
-                onBothClick = { viewModel.openTaskCountDialog("both") }
+                onBothClick = { viewModel.openTaskCountDialog("both") },
+                onBackClick = { viewModel.hideDeepLearningButtons() }  // NEU
             )
         }
-
         if (!isEditMode) {
             PracticeModeHints()
             Spacer(modifier = Modifier.height(8.dp))
@@ -444,7 +444,3 @@ private fun getFileNameFromUri(context: android.content.Context, uriString: Stri
         return "Fehler"
     }
 }
-
-
-
-
