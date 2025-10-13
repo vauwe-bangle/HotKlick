@@ -158,13 +158,21 @@ fun DeepLearningButtons(
     }
 }
 
-// EDITIERMODUS-CONTROLS
+// EDITIERMODUS-CONTROLS (AKTUALISIERT)
+// ERSETZE die EditModeControls Funktion in ModeComponents.kt mit dieser Version:
+
+// EDITIERMODUS-CONTROLS (AKTUALISIERT)
 @Composable
 fun EditModeControls(
     backgroundImageUri: Uri?,
     pointRadius: Float,
     editImagePickerLauncher: ManagedActivityResultLauncher<String, Uri?>,
-    viewModel: DrawingViewModel
+    viewModel: DrawingViewModel,
+    // NEU: Export/Import Parameter
+    isExporting: Boolean = false,
+    isImporting: Boolean = false,
+    onExportClick: () -> Unit = {},
+    onImportClick: () -> Unit = {}
 ) {
     Column {
         Text(
@@ -181,31 +189,91 @@ fun EditModeControls(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // Bild laden Button (halbe Breite)
             Button(
                 onClick = {
                     println("DEBUG Button: Bild-laden Button geklickt")
                     editImagePickerLauncher.launch("image/*")
                 },
                 modifier = Modifier.weight(1f)
-            ) {                Icon(Icons.Default.Add, contentDescription = null)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Bild laden")
             }
 
+            // NEU: Export Button
+            Button(
+                onClick = onExportClick,
+                modifier = Modifier.weight(1.5f),
+                enabled = backgroundImageUri != null &&
+                        !backgroundImageUri.toString().contains("info_") &&
+                        !isExporting && !isImporting,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = androidx.compose.ui.graphics.Color(0xFFFF9800) // Orange
+                )
+            ) {
+                if (isExporting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = androidx.compose.ui.graphics.Color.White
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Exportiere...", fontWeight = FontWeight.Bold)
+                } else {
+                    Text(
+                        text = "📤",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                    Text("Export", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // NEU: Import Button
+            Button(
+                onClick = onImportClick,
+                modifier = Modifier.weight(1.5f),
+                enabled = !isExporting && !isImporting,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = androidx.compose.ui.graphics.Color(0xFF2196F3) // Blau
+                )
+            ) {
+                if (isImporting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = androidx.compose.ui.graphics.Color.White
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Importiere...", fontWeight = FontWeight.Bold)
+                } else {
+                    Text(
+                        text = "📥",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                    Text("Import", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // Daten speichern & Bild entfernen Button
             if (backgroundImageUri != null) {
                 Button(
                     onClick = { viewModel.saveDataAndClearImage() },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error
                     ),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(2.5f)
                 ) {
                     Icon(Icons.Default.Delete, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Daten speichern & Bild entfernen")
+                    Text("Speichern & Entfernen", fontWeight = FontWeight.Bold)
                 }
             }
 
+            // Radius-Control (in der gleichen Zeile)
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -214,33 +282,33 @@ fun EditModeControls(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 12.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp)
                 ) {
                     IconButton(
                         onClick = { viewModel.decreasePointRadius() },
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.size(36.dp)
                     ) {
                         Text(
                             text = "−",
-                            style = MaterialTheme.typography.headlineMedium,
+                            style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
 
                     Text(
                         text = "${pointRadius.toInt()}px",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(horizontal = 16.dp),
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(horizontal = 8.dp),
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
                     IconButton(
                         onClick = { viewModel.increasePointRadius() },
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.size(36.dp)
                     ) {
                         Text(
                             text = "+",
-                            style = MaterialTheme.typography.headlineMedium,
+                            style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }

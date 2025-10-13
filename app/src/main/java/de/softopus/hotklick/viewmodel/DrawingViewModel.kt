@@ -19,6 +19,8 @@ import android.os.Vibrator
 import android.os.VibratorManager
 
 import android.content.Intent
+// NEU für Export/Import - Füge diesen Import hinzu falls noch nicht vorhanden:
+import kotlinx.coroutines.delay
 
 class DrawingViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -832,6 +834,109 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             kotlinx.coroutines.delay(2000)
             _message.value = ""
+        }
+    }
+
+    // Füge diese Funktionen zum DrawingViewModel hinzu (am Ende der Klasse)
+
+    // Export/Import States
+    private val _isExporting = MutableStateFlow(false)
+    val isExporting: StateFlow<Boolean> = _isExporting.asStateFlow()
+
+    private val _isImporting = MutableStateFlow(false)
+    val isImporting: StateFlow<Boolean> = _isImporting.asStateFlow()
+
+    private val exportImportManager by lazy {
+        de.softopus.hotklick.util.ExportImportManager(getApplication())
+    }
+
+    /**
+     * Exportiert die aktuelle Übung als ZIP
+     */
+    fun exportExercise(destinationUri: Uri) {
+        viewModelScope.launch {
+            _isExporting.value = true
+            _message.value = "Exportiere Übung..."
+
+            try {
+                val currentImageUri = _backgroundImageUri.value?.toString()
+                val currentPoints = _currentSessionPoints.value
+                val currentExerciseName = _exerciseName.value
+
+                if (currentImageUri == null || currentImageUri.contains("info_")) {
+                    _message.value = "Kein Bild zum Exportieren vorhanden"
+                    _isExporting.value = false
+                    delay(3000)
+                    _message.value = ""
+                    return@launch
+                }
+
+                if (currentPoints.isEmpty()) {
+                    _message.value = "Keine Hotspots zum Exportieren vorhanden"
+                    _isExporting.value = false
+                    delay(3000)
+                    _message.value = ""
+                    return@launch
+                }
+
+                val success = exportImportManager.exportExercise(
+                    imageUri = currentImageUri,
+                    points = currentPoints,
+                    exerciseName = currentExerciseName.ifEmpty { "Übung" },
+                    destinationUri = destinationUri
+                )
+
+                if (success) {
+                    _message.value = "✓ Export erfolgreich!"
+                } else {
+                    _message.value = "✗ Export fehlgeschlagen"
+                }
+            } catch (e: Exception) {
+                println("DEBUG exportExercise: Fehler - ${e.message}")
+                _message.value = "Fehler beim Export: ${e.message}"
+            } finally {
+                _isExporting.value = false
+                delay(3000)
+                _message.value = ""
+            }
+        }
+    }
+
+    /**
+     * Importiert eine Übung aus einer ZIP-Datei
+     */
+    fun importExercise(zipUri: Uri) {
+        viewModelScope.launch {
+            _isImporting.value = true
+            _message.value = "Importiere Übung..."
+
+            try {
+                val result = exportImportManager.importExercise(zipUri)
+
+                if (result != null) {
+                    // Speichere Punkte in Datenbank
+                    repository.deleteAllPointsForImage(result.imageUri)
+                    result.points.forEach { point ->
+                        repository.insertPoint(point)
+                    }
+
+                    // Lade importierte Übung
+                    _backgroundImageUri.value = Uri.parse(result.imageUri)
+                    _currentSessionPoints.value = result.points
+                    _exerciseName.value = result.exerciseName
+
+                    _message.value = "✓ ${result.points.size} Hotspots importiert!"
+                } else {
+                    _message.value = "✗ Import fehlgeschlagen"
+                }
+            } catch (e: Exception) {
+                println("DEBUG importExercise: Fehler - ${e.message}")
+                _message.value = "Fehler beim Import: ${e.message}"
+            } finally {
+                _isImporting.value = false
+                delay(3000)
+                _message.value = ""
+            }
         }
     }
 }

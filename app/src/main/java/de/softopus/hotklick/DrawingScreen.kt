@@ -109,6 +109,31 @@ fun DrawingScreen(
 
     val currentAudio by viewModel.currentAudioUri.collectAsState()
 
+    // Füge diese Code-Abschnitte zu DrawingScreen.kt hinzu
+
+// 1. States für Export/Import (bei den anderen States hinzufügen)
+    val isExporting by viewModel.isExporting.collectAsState()
+    val isImporting by viewModel.isImporting.collectAsState()
+
+// 2. File Picker Launcher für Export/Import (nach den anderen Launchern)
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri: Uri? ->
+        uri?.let {
+            println("DEBUG Export: Ziel-URI = $uri")
+            viewModel.exportExercise(it)
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            println("DEBUG Import: Quell-URI = $uri")
+            viewModel.importExercise(it)
+        }
+    }
+
     LaunchedEffect(
         currentAudio,
         isDeepLearningMode,
@@ -258,8 +283,6 @@ fun DrawingScreen(
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
-            println("DEBUG DrawingScreen VOR Canvas: isDeepLearningMode=$isDeepLearningMode")
-
             HotspotCanvas(
                 backgroundImageUri = backgroundImageUri,
                 points = points,
@@ -326,12 +349,22 @@ fun DrawingScreen(
                 backgroundImageUri = backgroundImageUri,
                 pointRadius = pointRadius,
                 editImagePickerLauncher = editImagePickerLauncher,
-                viewModel = viewModel
+                viewModel = viewModel,
+                isExporting = isExporting,              // NEU
+                isImporting = isImporting,              // NEU
+                onExportClick = {
+                    val exerciseName = viewModel.exerciseName.value.ifEmpty { "Übung" }
+                    val fileName = exerciseName.replace(" ", "_") + "_" +
+                            System.currentTimeMillis() + ".zip"
+                    exportLauncher.launch(fileName)
+                },
+                onImportClick = {
+                    importLauncher.launch("application/zip")
+                }
             )
         }
 
         HotspotStats(points = points)
-
         if (!isEditMode) {
             HotspotTextDisplay(
                 selectedHotspotText = selectedHotspotText,
@@ -339,6 +372,7 @@ fun DrawingScreen(
                 viewModel = viewModel
             )
         }
+
 // ========== DIALOGE ==========
 
         TextDialog(
@@ -393,53 +427,38 @@ fun DrawingScreen(
 }
 
 private fun getFileNameFromUri(context: android.content.Context, uriString: String): String {
-    return try {
+        return try {
         val uri = Uri.parse(uriString)
-        println("DEBUG getFileName: URI = $uriString")
-        println("DEBUG getFileName: Scheme = ${uri.scheme}")
-        println("DEBUG getFileName: Authority = ${uri.authority}")
-
-        if (uri.scheme == "content") {
-            var displayName = ""
-
-            println("DEBUG getFileName: Starte ContentResolver Query")
-            context.contentResolver.query(
-                uri,
-                arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
-                null,
-                null,
-                null
-            )?.use { cursor ->
-                println("DEBUG getFileName: Cursor count = ${cursor.count}")
-                if (cursor.moveToFirst()) {
-                    val nameIndex =
-                        cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                    println("DEBUG getFileName: nameIndex = $nameIndex")
-                    if (nameIndex != -1) {
-                        displayName = cursor.getString(nameIndex)
-                        println("DEBUG getFileName: DISPLAY_NAME = '$displayName'")
-                    }
+    if (uri.scheme == "content") {
+        var displayName = ""
+        context.contentResolver.query(
+            uri,
+            arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val nameIndex =
+                    cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (nameIndex != -1) {
+                    displayName = cursor.getString(nameIndex)
                 }
             }
-
-            if (displayName.isNotEmpty()) {
-                val nameWithoutExtension = displayName.substringBeforeLast(".")
-                println("DEBUG getFileName: Ergebnis = '$nameWithoutExtension'")
-                return nameWithoutExtension
-            }
-
-            println("DEBUG getFileName: displayName ist leer")
-            return "Unbekannte Übung"
-        } else if (uri.scheme == "file") {
-            val path = uri.path ?: ""
-            val fileName = path.substringAfterLast("/")
-            return fileName.substringBeforeLast(".")
-        } else {
-            println("DEBUG getFileName: Unbekanntes Scheme: ${uri.scheme}")
-            return ""
         }
+        if (displayName.isNotEmpty()) {
+            val nameWithoutExtension = displayName.substringBeforeLast(".")
+            return nameWithoutExtension
+        }
+        return "Unbekannte Übung"
+    } else if (uri.scheme == "file") {
+        val path = uri.path ?: ""
+        val fileName = path.substringAfterLast("/")
+        return fileName.substringBeforeLast(".")
+    } else {
+        return ""
+    }
     } catch (e: Exception) {
-        println("DEBUG getFileName: Exception = ${e.message}")
         e.printStackTrace()
         return "Fehler"
     }
