@@ -58,6 +58,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.filled.Edit
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.Manifest
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DrawingScreen(
@@ -209,6 +213,19 @@ fun DrawingScreen(
     ) { uri: Uri? ->
         uri?.let {
             viewModel.saveAudioToPoint(it.toString())
+        }
+    }
+
+    // Audio Permission Launcher
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            println("DEBUG: Audio-Berechtigung erteilt")
+            viewModel.openRecorderDialog()
+        } else {
+            println("DEBUG: Audio-Berechtigung VERWEIGERT")
+            viewModel.showMessage("Audio-Berechtigung benötigt!")
         }
     }
 
@@ -389,13 +406,13 @@ fun DrawingScreen(
             selectedPoint = selectedPointForAudio,
             onLoadAudio = { audioPickerLauncher.launch("audio/*") },
             onRecordAudio = {
-                viewModel.openRecorderDialog()
                 viewModel.closeAudioDialog()
+                // Prüfe Berechtigung
+                audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             },
             onRemoveAudio = { viewModel.removeAudioFromPoint() },
             onDismiss = { viewModel.closeAudioDialog() }
         )
-
         RecorderDialog(
             showDialog = showRecorderDialog,
             isRecording = isRecording,

@@ -354,10 +354,11 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
 
     fun openAudioDialog(point: DrawPoint) {
         _selectedPointForAudio.value = point
+        _currentRecordingPointName.value = point.name  // NEU: Speichere Namen SOFORT
         _showAudioDialog.value = true
         println("DEBUG: Audio-Dialog geöffnet für ${point.name}")
+        println("DEBUG: _currentRecordingPointName gesetzt auf: ${_currentRecordingPointName.value}")  // NEU
     }
-
     fun closeAudioDialog() {
         _showAudioDialog.value = false
         _selectedPointForAudio.value = null
@@ -409,8 +410,15 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
         // Kopiere Audio in App-Speicher
         val localUri = copyAudioToAppStorage(audioUri)
 
+        println("DEBUG: copyAudioToAppStorage returned: $localUri")  // NEU
+
         if (localUri == null) {
             println("DEBUG: FEHLER beim Kopieren der Audio-Datei")
+            _message.value = "Fehler beim Speichern der Audiodatei"
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(3000)
+                _message.value = ""
+            }
             return
         }
 
@@ -424,6 +432,7 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             currentPoints[pointIndex] = updatedPoint
             _currentSessionPoints.value = currentPoints
             println("DEBUG: Audio erfolgreich zugeordnet zu ${updatedPoint.name} - Lokale URI: $localUri")
+            println("DEBUG: Point hat jetzt audioUri: ${updatedPoint.audioUri}")  // NEU
             _message.value = "Audio für ${updatedPoint.name} zugeordnet"
 
             viewModelScope.launch {
@@ -434,7 +443,6 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             println("DEBUG: FEHLER - Punkt $pointName nicht gefunden!")
         }
     }
-
     fun removeAudioFromPoint() {
         val selectedPoint = _selectedPointForAudio.value
 
@@ -458,13 +466,14 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun openRecorderDialog() {
-        // Punktname speichern BEVOR Audio-Dialog geschlossen wird
-        _currentRecordingPointName.value = _selectedPointForAudio.value?.name
-        println("DEBUG: openRecorderDialog - speichere Punktname: ${_currentRecordingPointName.value}")
+        // Sicherheitshalber nochmal setzen (falls zwischenzeitlich gelöscht)
+        if (_currentRecordingPointName.value == null) {
+            _currentRecordingPointName.value = _selectedPointForAudio.value?.name
+        }
+        println("DEBUG: openRecorderDialog - Punktname: ${_currentRecordingPointName.value}")
         _showRecorderDialog.value = true
         println("DEBUG: Recorder-Dialog geöffnet")
     }
-
     fun closeRecorderDialog() {
         _showRecorderDialog.value = false
         _isRecording.value = false
@@ -837,7 +846,6 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // Füge diese Funktionen zum DrawingViewModel hinzu (am Ende der Klasse)
 
     // Export/Import States
     private val _isExporting = MutableStateFlow(false)
@@ -937,6 +945,14 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
                 delay(3000)
                 _message.value = ""
             }
+        }
+    }
+
+    fun showMessage(msg: String) {
+        _message.value = msg
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(3000)
+            _message.value = ""
         }
     }
 }
