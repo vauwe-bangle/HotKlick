@@ -497,9 +497,6 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun toggleToEditMode() {
-        println("DEBUG toggleToEditMode: CALLED")
-        println("DEBUG toggleToEditMode: _isEditMode.value = ${_isEditMode.value}")
-
         if (!_isEditMode.value) {
             _isEditMode.value = true
             closeTextDialog()
@@ -633,13 +630,7 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun nextDeepLearningChallenge() {
-        println("DEBUG: ========== nextDeepLearningChallenge START ==========")
-
         val currentPoints = _currentSessionPoints.value
-
-        println("DEBUG: nextDeepLearningChallenge - currentPoints: ${currentPoints.size}")
-        println("DEBUG: deepLearningType: ${_deepLearningType.value}")
-
         val eligiblePoints = when (_deepLearningType.value) {
             "text" -> currentPoints.filter { it.text != null && it.text.isNotEmpty() }
             "audio" -> currentPoints.filter { it.audioUri != null }

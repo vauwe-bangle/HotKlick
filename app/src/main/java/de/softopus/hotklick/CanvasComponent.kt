@@ -1,6 +1,8 @@
 // CanvasComponent.kt
+// KORRIGIERT: Mit View → Bitmap Koordinaten-Konvertierung
 package de.softopus.hotklick
 
+import android.graphics.RectF
 import android.media.MediaPlayer
 import android.net.Uri
 import androidx.activity.compose.ManagedActivityResultLauncher
@@ -8,7 +10,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -18,9 +20,12 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import coil.compose.AsyncImage
 import de.softopus.hotklick.data.DrawPoint
 import de.softopus.hotklick.viewmodel.DrawingViewModel
+import androidx.compose.ui.unit.IntSize
 
 @Composable
 fun HotspotCanvas(
@@ -28,7 +33,7 @@ fun HotspotCanvas(
     points: List<DrawPoint>,
     pointRadius: Float,
     isEditMode: Boolean,
-    isDeepLearningMode: Boolean,  // NEU
+    isDeepLearningMode: Boolean,
     viewModel: DrawingViewModel,
     mediaPlayer: MediaPlayer?,
     isPlaying: Boolean,
@@ -38,7 +43,35 @@ fun HotspotCanvas(
     practiceImagePickerLauncher: ManagedActivityResultLauncher<String, Uri?>,
     context: android.content.Context
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
+    // Speichere View-Größe und Bild-Größe für Koordinaten-Konvertierung
+    var viewSize by remember { mutableStateOf(IntSize.Zero) }
+    var imageSize by remember { mutableStateOf(IntSize.Zero) }
+
+    // Lade Original-Bildgröße direkt aus URI (WICHTIG!)
+    LaunchedEffect(backgroundImageUri) {
+        backgroundImageUri?.let { uri ->
+            try {
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    val options = android.graphics.BitmapFactory.Options().apply {
+                        inJustDecodeBounds = true
+                    }
+                    android.graphics.BitmapFactory.decodeStream(inputStream, null, options)
+                    imageSize = IntSize(options.outWidth, options.outHeight)
+                    println("DEBUG: Original image size from URI: ${imageSize.width}x${imageSize.height}")
+                }
+            } catch (e: Exception) {
+                println("DEBUG: Error loading image size: ${e.message}")
+            }
+        }
+    }
+
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .onGloballyPositioned { coordinates ->
+            viewSize = coordinates.size
+            println("DEBUG: View size: ${viewSize.width}x${viewSize.height}")
+        }
+    ) {
         if (backgroundImageUri != null) {
             AsyncImage(
                 model = backgroundImageUri,
@@ -51,10 +84,14 @@ fun HotspotCanvas(
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(points, pointRadius, isEditMode, isDeepLearningMode, backgroundImageUri) {  // <-- HINZUGEFÜGT
+                .pointerInput(points, pointRadius, isEditMode, isDeepLearningMode, backgroundImageUri) {
                     detectTapGestures(
                         onTap = { offset: Offset ->
-                            val hitPoint = findHitPoint(points, offset)
+                            // Konvertiere View → Bitmap Koordinaten für Hit-Test
+                            val bitmapOffset = viewToBitmapCoordinates(
+                                offset, viewSize, imageSize
+                            )
+                            val hitPoint = findHitPoint(points, bitmapOffset)
 
                             if (isEditMode) {
                                 hitPoint?.let {
@@ -65,7 +102,6 @@ fun HotspotCanvas(
                                     if (hitPoint != null) {
                                         viewModel.checkDeepLearningAnswer(hitPoint)
                                     } else {
-                                        // FEHLER-KLICK: Erstelle Dummy-Point für falsche Antwort
                                         val dummyPoint = DrawPoint(
                                             id = -1,
                                             name = "FEHLER",
@@ -79,7 +115,6 @@ fun HotspotCanvas(
                                         viewModel.checkDeepLearningAnswer(dummyPoint)
                                     }
                                 } else {
-                                    // Normaler Übungsmodus
                                     if (hitPoint != null) {
                                         if (hitPoint.text != null && hitPoint.text.isNotEmpty()) {
                                             viewModel.showHotspotText(hitPoint)
@@ -99,11 +134,19 @@ fun HotspotCanvas(
                                 if (hasNoRealImage) {
                                     editImagePickerLauncher.launch("image/*")
                                 } else {
-                                    val hitPoint = findHitPoint(points, offset)
+                                    // Konvertiere View → Bitmap Koordinaten
+                                    val bitmapOffset = viewToBitmapCoordinates(
+                                        offset, viewSize, imageSize
+                                    )
+
+                                    println("DEBUG LongPress: View(${offset.x}, ${offset.y}) → Bitmap(${bitmapOffset.x}, ${bitmapOffset.y})")
+
+                                    val hitPoint = findHitPoint(points, bitmapOffset)
                                     if (hitPoint != null) {
                                         viewModel.openAudioDialog(hitPoint)
                                     } else {
-                                        viewModel.addPoint(offset.x, offset.y)
+                                        // WICHTIG: Speichere BITMAP-Koordinaten!
+                                        viewModel.addPoint(bitmapOffset.x, bitmapOffset.y)
                                     }
                                 }
                             } else {
@@ -112,12 +155,20 @@ fun HotspotCanvas(
                         },
                         onDoubleTap = { offset: Offset ->
                             if (isEditMode) {
-                                val hitPoint = findHitPoint(points, offset)
+                                // Konvertiere View → Bitmap Koordinaten
+                                val bitmapOffset = viewToBitmapCoordinates(
+                                    offset, viewSize, imageSize
+                                )
+                                val hitPoint = findHitPoint(points, bitmapOffset)
                                 hitPoint?.let { point ->
                                     viewModel.openTextDialog(point)
                                 }
                             } else {
-                                val hitPoint = findHitPoint(points, offset)
+                                // Konvertiere View → Bitmap Koordinaten
+                                val bitmapOffset = viewToBitmapCoordinates(
+                                    offset, viewSize, imageSize
+                                )
+                                val hitPoint = findHitPoint(points, bitmapOffset)
                                 if (hitPoint != null && hitPoint.audioUri != null) {
                                     if (hitPoint.text != null && hitPoint.text.isNotEmpty()) {
                                         viewModel.showHotspotText(hitPoint)
@@ -156,9 +207,107 @@ fun HotspotCanvas(
                     )
                 }
         ) {
-            drawHotspots(points, isEditMode)
+            // WICHTIG: Zeichne Hotspots auch mit Koordinaten-Konvertierung!
+            drawHotspots(points, isEditMode, viewSize, imageSize)
         }
     }
+}
+
+/**
+ * KRITISCH: Konvertiert View-Koordinaten zu Bitmap-Koordinaten
+ *
+ * Berücksichtigt:
+ * - ContentScale.Fit (Bild wird skaliert aber Aspect Ratio beibehalten)
+ * - Zentrierung des Bildes in der View
+ *
+ * @param viewOffset Touch-Koordinaten aus dem Canvas (View)
+ * @param viewSize Größe der View/Canvas
+ * @param imageSize Originalgröße des Bildes (Bitmap)
+ * @return Koordinaten im Bitmap-Koordinatensystem
+ */
+private fun viewToBitmapCoordinates(
+    viewOffset: Offset,
+    viewSize: IntSize,
+    imageSize: IntSize
+): Offset {
+    if (imageSize.width == 0 || imageSize.height == 0) {
+        // Bild noch nicht geladen
+        return viewOffset
+    }
+
+    // Berechne Skalierungsfaktor für ContentScale.Fit
+    val viewAspect = viewSize.width.toFloat() / viewSize.height.toFloat()
+    val imageAspect = imageSize.width.toFloat() / imageSize.height.toFloat()
+
+    val scale: Float
+    val scaledWidth: Float
+    val scaledHeight: Float
+    val offsetX: Float
+    val offsetY: Float
+
+    if (viewAspect > imageAspect) {
+        // View ist breiter → Bild wird an Höhe angepasst
+        scale = viewSize.height.toFloat() / imageSize.height.toFloat()
+        scaledWidth = imageSize.width * scale
+        scaledHeight = viewSize.height.toFloat()
+        offsetX = (viewSize.width - scaledWidth) / 2f
+        offsetY = 0f
+    } else {
+        // View ist höher → Bild wird an Breite angepasst
+        scale = viewSize.width.toFloat() / imageSize.width.toFloat()
+        scaledWidth = viewSize.width.toFloat()
+        scaledHeight = imageSize.height * scale
+        offsetX = 0f
+        offsetY = (viewSize.height - scaledHeight) / 2f
+    }
+
+    // Konvertiere View-Koordinaten zu Bitmap-Koordinaten
+    val bitmapX = (viewOffset.x - offsetX) / scale
+    val bitmapY = (viewOffset.y - offsetY) / scale
+
+    return Offset(bitmapX, bitmapY)
+}
+
+/**
+ * KRITISCH: Konvertiert Bitmap-Koordinaten zu View-Koordinaten (für Darstellung)
+ */
+private fun bitmapToViewCoordinates(
+    bitmapOffset: Offset,
+    viewSize: IntSize,
+    imageSize: IntSize
+): Offset {
+    if (imageSize.width == 0 || imageSize.height == 0) {
+        return bitmapOffset
+    }
+
+    val viewAspect = viewSize.width.toFloat() / viewSize.height.toFloat()
+    val imageAspect = imageSize.width.toFloat() / imageSize.height.toFloat()
+
+    val scale: Float
+    val scaledWidth: Float
+    val scaledHeight: Float
+    val offsetX: Float
+    val offsetY: Float
+
+    if (viewAspect > imageAspect) {
+        scale = viewSize.height.toFloat() / imageSize.height.toFloat()
+        scaledWidth = imageSize.width * scale
+        scaledHeight = viewSize.height.toFloat()
+        offsetX = (viewSize.width - scaledWidth) / 2f
+        offsetY = 0f
+    } else {
+        scale = viewSize.width.toFloat() / imageSize.width.toFloat()
+        scaledWidth = viewSize.width.toFloat()
+        scaledHeight = imageSize.height * scale
+        offsetX = 0f
+        offsetY = (viewSize.height - scaledHeight) / 2f
+    }
+
+    // Konvertiere Bitmap-Koordinaten zu View-Koordinaten
+    val viewX = (bitmapOffset.x * scale) + offsetX
+    val viewY = (bitmapOffset.y * scale) + offsetY
+
+    return Offset(viewX, viewY)
 }
 
 private fun findHitPoint(points: List<DrawPoint>, offset: Offset): DrawPoint? {
@@ -187,8 +336,31 @@ private fun stopMediaPlayer(
     onIsPlayingChange(false)
 }
 
-private fun DrawScope.drawHotspots(points: List<DrawPoint>, isEditMode: Boolean) {
+private fun DrawScope.drawHotspots(
+    points: List<DrawPoint>,
+    isEditMode: Boolean,
+    viewSize: IntSize,
+    imageSize: IntSize
+) {
     points.forEach { point ->
+        // Konvertiere Bitmap-Koordinaten (gespeichert) zu View-Koordinaten (Darstellung)
+        val bitmapOffset = Offset(point.x, point.y)
+        val viewOffset = bitmapToViewCoordinates(bitmapOffset, viewSize, imageSize)
+
+        // Skaliere auch den Radius
+        val scale = if (imageSize.width > 0) {
+            val viewAspect = viewSize.width.toFloat() / viewSize.height.toFloat()
+            val imageAspect = imageSize.width.toFloat() / imageSize.height.toFloat()
+            if (viewAspect > imageAspect) {
+                viewSize.height.toFloat() / imageSize.height.toFloat()
+            } else {
+                viewSize.width.toFloat() / imageSize.width.toFloat()
+            }
+        } else {
+            1f
+        }
+        val viewRadius = point.radius * scale
+
         if (isEditMode) {
             val pointColor = when {
                 point.text != null && point.audioUri != null -> Color(0xFF4CAF50)
@@ -199,14 +371,14 @@ private fun DrawScope.drawHotspots(points: List<DrawPoint>, isEditMode: Boolean)
 
             drawCircle(
                 color = pointColor,
-                radius = point.radius,
-                center = Offset(point.x, point.y)
+                radius = viewRadius,
+                center = viewOffset
             )
 
             drawIntoCanvas { canvas ->
                 val paint = android.graphics.Paint().apply {
                     color = Color.Black.toArgb()
-                    textSize = (point.radius * 0.6f).coerceIn(16f, 48f)
+                    textSize = (viewRadius * 0.6f).coerceIn(16f, 48f)
                     textAlign = android.graphics.Paint.Align.CENTER
                     isAntiAlias = true
                     isFakeBoldText = true
@@ -214,16 +386,16 @@ private fun DrawScope.drawHotspots(points: List<DrawPoint>, isEditMode: Boolean)
 
                 canvas.nativeCanvas.drawText(
                     point.name,
-                    point.x,
-                    point.y - point.radius - 12f,
+                    viewOffset.x,
+                    viewOffset.y - viewRadius - 12f,
                     paint
                 )
             }
 
             drawCircle(
                 color = Color.Black,
-                radius = point.radius,
-                center = Offset(point.x, point.y),
+                radius = viewRadius,
+                center = viewOffset,
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
             )
 
@@ -231,7 +403,7 @@ private fun DrawScope.drawHotspots(points: List<DrawPoint>, isEditMode: Boolean)
                 drawCircle(
                     color = Color.White,
                     radius = 6f,
-                    center = Offset(point.x - 8f, point.y)
+                    center = Offset(viewOffset.x - 8f, viewOffset.y)
                 )
             }
 
@@ -239,7 +411,7 @@ private fun DrawScope.drawHotspots(points: List<DrawPoint>, isEditMode: Boolean)
                 drawCircle(
                     color = Color.White,
                     radius = 6f,
-                    center = Offset(point.x + 8f, point.y)
+                    center = Offset(viewOffset.x + 8f, viewOffset.y)
                 )
             }
         }
