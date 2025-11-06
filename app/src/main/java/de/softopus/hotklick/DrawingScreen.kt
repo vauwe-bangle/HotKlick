@@ -214,64 +214,65 @@ fun DrawingScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(HotKlickColors.Light)
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .background(HotKlickColors.Light),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Top Toolbar (Web-App Style)
-        ModernToolbar(
-            isEditMode = isEditMode,
-            showDeepLearningButtons = showDeepLearningButtons,
-            isDeepLearningMode = isDeepLearningMode,
-            tasksCurrent = deepLearningTasksCurrent,
-            tasksTotal = deepLearningTasksTotal,
-            correct = deepLearningCorrect,
-            backgroundImageUri = backgroundImageUri?.toString(),
-            exerciseNameInput = exerciseNameInput,
-            pointRadius = pointRadius,
-            viewModel = viewModel,
-            onExerciseNameClick = { viewModel.openExerciseNameDialog() },
-            onBackClick = onBackClick,
-            onExportClick = {
-                val exerciseName = exerciseNameInput.ifEmpty { "Übung" }
-                val fileName = exerciseName.replace(" ", "_") + "_" +
-                        System.currentTimeMillis() + ".zip"
-                exportLauncher.launch(fileName)
-            },
-            onImportClick = {
-                importLauncher.launch("application/zip")
-            }
-        )
-
+        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            ModernToolbar(
+                isEditMode = isEditMode,
+                showDeepLearningButtons = showDeepLearningButtons,
+                isDeepLearningMode = isDeepLearningMode,
+                tasksCurrent = deepLearningTasksCurrent,
+                tasksTotal = deepLearningTasksTotal,
+                correct = deepLearningCorrect,
+                backgroundImageUri = backgroundImageUri?.toString(),
+                exerciseNameInput = exerciseNameInput,
+                pointRadius = pointRadius,
+                viewModel = viewModel,
+                onExerciseNameClick = { viewModel.openExerciseNameDialog() },
+                onBackClick = onBackClick,
+                onExportClick = {
+                    val exerciseName = exerciseNameInput.ifEmpty { "Übung" }
+                    val fileName = exerciseName.replace(" ", "_") + "_" +
+                            System.currentTimeMillis() + ".zip"
+                    exportLauncher.launch(fileName)
+                },
+                onImportClick = {
+                    importLauncher.launch("application/zip")
+                }
+            )
+        }
         Spacer(modifier = Modifier.height(12.dp))
 
         // Canvas Card
-        Card(
-            modifier = Modifier
-                .width(canvasWidthDp)
-                .height(canvasHeightDp),
-            colors = CardDefaults.cardColors(
-                containerColor = HotKlickColors.White
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-            shape = RoundedCornerShape(4.dp)
-        ) {
-            HotspotCanvas(
-                backgroundImageUri = backgroundImageUri,
-                points = points,
-                pointRadius = pointRadius,
-                isEditMode = isEditMode,
-                isDeepLearningMode = isDeepLearningMode,
-                viewModel = viewModel,
-                mediaPlayer = mediaPlayer,
-                isPlaying = isPlaying,
-                onMediaPlayerChange = { mediaPlayer = it },
-                onIsPlayingChange = { isPlaying = it },
-                editImagePickerLauncher = editImagePickerLauncher,
-                practiceImagePickerLauncher = practiceImagePickerLauncher,
-                context = context
-            )
+        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Card(
+                modifier = Modifier
+                    .width(canvasWidthDp)
+                    .height(canvasHeightDp),
+                colors = CardDefaults.cardColors(
+                    containerColor = HotKlickColors.White
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                shape = RoundedCornerShape(4.dp)
+            ) {
+                HotspotCanvas(
+                    backgroundImageUri = backgroundImageUri,
+                    points = points,
+                    pointRadius = pointRadius,
+                    isEditMode = isEditMode,
+                    isDeepLearningMode = isDeepLearningMode,
+                    viewModel = viewModel,
+                    mediaPlayer = mediaPlayer,
+                    isPlaying = isPlaying,
+                    onMediaPlayerChange = { mediaPlayer = it },
+                    onIsPlayingChange = { isPlaying = it },
+                    editImagePickerLauncher = editImagePickerLauncher,
+                    practiceImagePickerLauncher = practiceImagePickerLauncher,
+                    context = context
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -297,11 +298,30 @@ fun DrawingScreen(
         HotspotStats(points = points)
 
         // Hotspot Text Display (immer sichtbar)
-        HotspotTextDisplay(
-            selectedHotspotText = selectedHotspotText,
-            uriHandler = uriHandler,
-            viewModel = viewModel
-        )
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = HotKlickColors.White
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            shape = RoundedCornerShape(4.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp)
+                    .verticalScroll(rememberScrollState())  // ← Scrollbar
+            ) {
+                HotspotTextDisplay(
+                    selectedHotspotText = selectedHotspotText,
+                    uriHandler = uriHandler,
+                    viewModel = viewModel
+                )
+            }
+        }
 
         // === DIALOGE ===
         TextDialog(
