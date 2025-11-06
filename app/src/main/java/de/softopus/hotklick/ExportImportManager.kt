@@ -287,7 +287,10 @@ class ExportImportManager(private val context: Context) {
             pointJson.put("radius", relativeRadius.toDouble())
             pointJson.put("imageUri", imageFileName)
             pointJson.put("text", point.text ?: "")
-            pointJson.put("audioUri", audioFiles[index] ?: "")
+            // Nur audioUri setzen wenn tatsächlich vorhanden
+            if (audioFiles[index] != null) {
+                pointJson.put("audioUri", audioFiles[index])
+            }
             pointJson.put("exerciseName", exerciseName)
             pointJson.put("hasText", !point.text.isNullOrEmpty())
             pointJson.put("hasAudio", point.audioUri != null)

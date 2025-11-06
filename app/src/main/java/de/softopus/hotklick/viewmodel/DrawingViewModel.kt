@@ -860,7 +860,7 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             try {
                 val currentImageUri = _backgroundImageUri.value?.toString()
                 val currentPoints = _currentSessionPoints.value
-                val currentExerciseName = _exerciseName.value
+                val currentExerciseName = _exerciseName.value.ifEmpty { _exerciseNameInput.value }
 
                 if (currentImageUri == null || currentImageUri.contains("info_")) {
                     _message.value = "Kein Bild zum Exportieren vorhanden"
@@ -880,7 +880,7 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
 
                 val success = exportImportManager.exportExercise(
                     imageUri = currentImageUri,
-                    points = currentPoints,
+                    points = currentPoints,  // <- Zurück zu currentPoints
                     exerciseName = currentExerciseName.ifEmpty { "Übung" },
                     destinationUri = destinationUri
                 )
@@ -916,13 +916,24 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
                     // Speichere Punkte in Datenbank
                     repository.deleteAllPointsForImage(result.imageUri)
                     result.points.forEach { point ->
-                        repository.insertPoint(point)
-                    }
+                        // Prüfe ob Audio-Datei existiert
+                        val validAudioUri = point.audioUri?.let { uri ->
+                            try {
+                                val file = java.io.File(android.net.Uri.parse(uri).path ?: "")
+                                if (file.exists()) uri else null
+                            } catch (e: Exception) {
+                                null
+                            }
+                        }
 
+                        val cleanedPoint = point.copy(audioUri = validAudioUri)
+                        repository.insertPoint(cleanedPoint)
+                    }
                     // Lade importierte Übung
                     _backgroundImageUri.value = Uri.parse(result.imageUri)
                     _currentSessionPoints.value = result.points
                     _exerciseName.value = result.exerciseName
+                    _exerciseNameInput.value = result.exerciseName
 
                     _message.value = "✓ ${result.points.size} Hotspots importiert!"
                 } else {

@@ -444,7 +444,7 @@ fun DeepLearningResult(
         }
     }
 }
-// HILFSFUNKTION FÜR LINK-PARSING (aus DrawingScreen.kt verschoben)
+// HILFSFUNKTION FÜR LINK-PARSING (aus DrawingScreen_OLD.kt verschoben)
 private fun androidx.compose.ui.text.AnnotatedString.Builder.parseTextWithLinks(text: String) {
     val urlPattern = Pattern.compile(
         "(?i)\\b(?:https?://|www\\.)[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]"

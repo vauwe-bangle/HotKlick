@@ -1,4 +1,4 @@
-// DrawingScreen.kt
+// DrawingScreen.kt - Modernisiert nach Web-App Design
 package de.softopus.hotklick
 
 import android.content.ContentValues
@@ -14,11 +14,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.foundation.border
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -41,10 +40,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import de.softopus.hotklick.data.DrawPoint
 import de.softopus.hotklick.viewmodel.DrawingViewModel
+import de.softopus.hotklick.ui.theme.HotKlickColors
 import kotlinx.coroutines.delay
 import java.io.File
 import java.text.SimpleDateFormat
@@ -56,8 +57,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.material.icons.filled.Edit
-
 import androidx.compose.runtime.LaunchedEffect
 import androidx.activity.compose.rememberLauncherForActivityResult
 import android.Manifest
@@ -65,8 +64,10 @@ import android.Manifest
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DrawingScreen(
-    viewModel: DrawingViewModel = viewModel()
+    viewModel: DrawingViewModel = viewModel(),
+    onBackClick: (() -> Unit)? = null
 ) {
+    // States
     val points by viewModel.points.collectAsState()
     val message by viewModel.message.collectAsState()
     val backgroundImageUri by viewModel.backgroundImageUri.collectAsState()
@@ -79,23 +80,15 @@ fun DrawingScreen(
     val showRecorderDialog by viewModel.showRecorderDialog.collectAsState()
     val isRecording by viewModel.isRecording.collectAsState()
     val recordingDuration by viewModel.recordingDuration.collectAsState()
-    val currentRecordingPointName by viewModel.currentRecordingPointName.collectAsState()  // NEU
+    val currentRecordingPointName by viewModel.currentRecordingPointName.collectAsState()
     val isEditMode by viewModel.isEditMode.collectAsState()
     val selectedHotspotText by viewModel.selectedHotspotText.collectAsState()
-
     val showDeepLearningResult by viewModel.showDeepLearningResult.collectAsState()
     val showExerciseNameDialog by viewModel.showExerciseNameDialog.collectAsState()
     val exerciseNameInput by viewModel.exerciseNameInput.collectAsState()
     val density = LocalDensity.current
-
-    LaunchedEffect(selectedHotspotText) {
-        println("DEBUG DrawingScreen: selectedHotspotText = '$selectedHotspotText'")
-    }
     val selectedHotspotName by viewModel.selectedHotspotName.collectAsState()
-
-
-// Audio-Wiedergabe für Vertiefungsmodus
-    val showDeepLearningButtons by viewModel.showDeepLearningButtons.collectAsState()  // NEU
+    val showDeepLearningButtons by viewModel.showDeepLearningButtons.collectAsState()
     val isDeepLearningMode by viewModel.isDeepLearningMode.collectAsState()
     val showTaskCountDialog by viewModel.showTaskCountDialog.collectAsState()
     val selectedDeepLearningType by viewModel.selectedDeepLearningType.collectAsState()
@@ -110,16 +103,11 @@ fun DrawingScreen(
     var isPlaying by remember { mutableStateOf(false) }
     var mediaRecorder: MediaRecorder? by remember { mutableStateOf(null) }
     var recordingFile: File? by remember { mutableStateOf(null) }
-
     val currentAudio by viewModel.currentAudioUri.collectAsState()
-
-    // Füge diese Code-Abschnitte zu DrawingScreen.kt hinzu
-
-// 1. States für Export/Import (bei den anderen States hinzufügen)
     val isExporting by viewModel.isExporting.collectAsState()
     val isImporting by viewModel.isImporting.collectAsState()
 
-// 2. File Picker Launcher für Export/Import (nach den anderen Launchern)
+    // Launcher
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/zip")
     ) { uri: Uri? ->
@@ -138,37 +126,63 @@ fun DrawingScreen(
         }
     }
 
-    LaunchedEffect(
-        currentAudio,
-        isDeepLearningMode,
-        deepLearningTasksCurrent
-    ) {  // Counter hinzufügen!
-        println("DEBUG LaunchedEffect: currentAudio=$currentAudio, isDeepLearningMode=$isDeepLearningMode, task=$deepLearningTasksCurrent")
+    // Audio-Launcher
+    val audioPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            println("DEBUG AudioPicker: URI empfangen = $uri")
+            viewModel.saveAudioToPoint(it.toString())
+        }
+    }
 
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.openRecorderDialog()
+        }
+    }
+
+    // Image-Launcher
+    val editImagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        println("DEBUG ImagePicker: URI empfangen = $uri")
+        viewModel.setBackgroundImage(uri)
+        println("DEBUG ImagePicker: setBackgroundImage aufgerufen")
+    }
+
+    val practiceImagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        println("DEBUG PracticeImagePicker: URI empfangen = $uri")
+        viewModel.setBackgroundImage(uri)
+        println("DEBUG PracticeImagePicker: setBackgroundImage aufgerufen")
+    }
+
+    // Audio-Wiedergabe
+    LaunchedEffect(currentAudio, isDeepLearningMode, deepLearningTasksCurrent) {
+        println("DEBUG LaunchedEffect: currentAudio=$currentAudio, isDeepLearningMode=$isDeepLearningMode")
         if (isDeepLearningMode && currentAudio != null) {
             println("DEBUG: Bedingung erfüllt - starte Audio")
             try {
-                println("DEBUG: Versuche Audio abzuspielen: $currentAudio")
-
                 mediaPlayer?.apply {
                     if (isPlaying()) stop()
                     reset()
                     release()
                 }
-
                 mediaPlayer = MediaPlayer().apply {
                     setDataSource(context, Uri.parse(currentAudio))
                     prepare()
                     start()
                     isPlaying = true
-
                     setOnCompletionListener {
                         isPlaying = false
                         release()
                         mediaPlayer = null
                     }
                 }
-
                 println("DEBUG: Audio erfolgreich gestartet")
             } catch (e: Exception) {
                 println("DEBUG: Fehler beim Audio abspielen: ${e.message}")
@@ -176,7 +190,6 @@ fun DrawingScreen(
             }
         }
     }
-
 
     DisposableEffect(Unit) {
         onDispose {
@@ -193,119 +206,63 @@ fun DrawingScreen(
         }
     }
 
-    val editImagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        println("DEBUG ImagePicker: URI empfangen = $uri")
-        viewModel.setBackgroundImage(uri)
-        println("DEBUG ImagePicker: setBackgroundImage aufgerufen")
-    }
-    val practiceImagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        println("DEBUG PracticeImagePicker: URI empfangen = $uri")
-        viewModel.setBackgroundImage(uri)
-        println("DEBUG PracticeImagePicker: setBackgroundImage aufgerufen")
-    }
+    // Canvas-Dimensionen
+    val canvasWidthDp = 1024.dp / density.density
+    val canvasHeightDp = 600.dp / density.density
 
-    val audioPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let {
-            viewModel.saveAudioToPoint(it.toString())
-        }
-    }
-
-    // Audio Permission Launcher
-    val audioPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
-            println("DEBUG: Audio-Berechtigung erteilt")
-            viewModel.openRecorderDialog()
-        } else {
-            println("DEBUG: Audio-Berechtigung VERWEIGERT")
-            viewModel.showMessage("Audio-Berechtigung benötigt!")
-        }
-    }
-
-    val canvasWidthDp = 1024.dp
-    val canvasHeightDp = 600.dp
-
+    // === MAIN UI ===
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
+            .background(HotKlickColors.Light)
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // ÜBUNGSNAME
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-        ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                val exerciseName by viewModel.exerciseName.collectAsState()
-
-                if (backgroundImageUri != null && !backgroundImageUri.toString()
-                        .contains("info_")
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = exerciseName.ifEmpty { "Übungsname nicht gesetzt" },
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = if (exerciseName.isEmpty())
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            else
-                                MaterialTheme.colorScheme.onSurface
-                        )
-                        if (isEditMode) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            IconButton(
-                                onClick = { viewModel.openExerciseNameDialog() }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = "Übungsname bearbeiten"
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    Text(
-                        text = "Keine Übung geladen",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    )
-                }
+        // Top Toolbar (Web-App Style)
+        ModernToolbar(
+            isEditMode = isEditMode,
+            showDeepLearningButtons = showDeepLearningButtons,
+            isDeepLearningMode = isDeepLearningMode,
+            tasksCurrent = deepLearningTasksCurrent,
+            tasksTotal = deepLearningTasksTotal,
+            correct = deepLearningCorrect,
+            backgroundImageUri = backgroundImageUri?.toString(),
+            exerciseNameInput = exerciseNameInput,
+            pointRadius = pointRadius,
+            viewModel = viewModel,
+            onExerciseNameClick = { viewModel.openExerciseNameDialog() },
+            onBackClick = onBackClick,
+            onExportClick = {
+                val exerciseName = exerciseNameInput.ifEmpty { "Übung" }
+                val fileName = exerciseName.replace(" ", "_") + "_" +
+                        System.currentTimeMillis() + ".zip"
+                exportLauncher.launch(fileName)
+            },
+            onImportClick = {
+                importLauncher.launch("application/zip")
             }
-        }
+        )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
+        // Canvas Card
         Card(
-            modifier = Modifier.size(canvasWidthDp, canvasHeightDp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            modifier = Modifier
+                .width(canvasWidthDp)
+                .height(canvasHeightDp),
+            colors = CardDefaults.cardColors(
+                containerColor = HotKlickColors.White
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+            shape = RoundedCornerShape(4.dp)
         ) {
             HotspotCanvas(
                 backgroundImageUri = backgroundImageUri,
                 points = points,
                 pointRadius = pointRadius,
                 isEditMode = isEditMode,
-                isDeepLearningMode = isDeepLearningMode,  // NEU
+                isDeepLearningMode = isDeepLearningMode,
                 viewModel = viewModel,
                 mediaPlayer = mediaPlayer,
                 isPlaying = isPlaying,
@@ -319,38 +276,13 @@ fun DrawingScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            ModeToggleButton(
-                isEditMode = isEditMode,
-                showDeepLearningButtons = showDeepLearningButtons,
-                isDeepLearningMode = isDeepLearningMode,  // NEU
-                tasksCurrent = deepLearningTasksCurrent,  // NEU
-                tasksTotal = deepLearningTasksTotal,  // NEU
-                correct = deepLearningCorrect,  // NEU
-                viewModel = viewModel
-            )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-
-// Vertiefungsmodus-Buttons
-
-        if (showDeepLearningButtons) {
-            DeepLearningButtons(
-                onTextClick = { viewModel.openTaskCountDialog("text") },
-                onAudioClick = { viewModel.openTaskCountDialog("audio") },
-                onBothClick = { viewModel.openTaskCountDialog("both") },
-                onBackClick = { viewModel.hideDeepLearningButtons() }  // NEU
-            )
-        }
-        if (!isEditMode) {
+        // Practice Mode Hints
+        if (!isEditMode && !isDeepLearningMode) {
             PracticeModeHints()
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
         }
 
-// Ergebnis-Anzeige
+        // Ergebnis-Anzeige
         if (showDeepLearningResult) {
             DeepLearningResult(
                 tasksTotal = deepLearningTasksTotal,
@@ -358,40 +290,20 @@ fun DrawingScreen(
                 wrong = deepLearningWrong,
                 onBack = { viewModel.backToOverview() }
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
         }
 
-        if (isEditMode) {
-            EditModeControls(
-                backgroundImageUri = backgroundImageUri,
-                pointRadius = pointRadius,
-                editImagePickerLauncher = editImagePickerLauncher,
-                viewModel = viewModel,
-                isExporting = isExporting,              // NEU
-                isImporting = isImporting,              // NEU
-                onExportClick = {
-                    val exerciseName = viewModel.exerciseName.value.ifEmpty { "Übung" }
-                    val fileName = exerciseName.replace(" ", "_") + "_" +
-                            System.currentTimeMillis() + ".zip"
-                    exportLauncher.launch(fileName)
-                },
-                onImportClick = {
-                    importLauncher.launch("application/zip")
-                }
-            )
-        }
-
+        // Hotspot Stats
         HotspotStats(points = points)
-        if (!isEditMode) {
-            HotspotTextDisplay(
-                selectedHotspotText = selectedHotspotText,
-                uriHandler = uriHandler,
-                viewModel = viewModel
-            )
-        }
 
-// ========== DIALOGE ==========
+        // Hotspot Text Display (immer sichtbar)
+        HotspotTextDisplay(
+            selectedHotspotText = selectedHotspotText,
+            uriHandler = uriHandler,
+            viewModel = viewModel
+        )
 
+        // === DIALOGE ===
         TextDialog(
             showDialog = isEditMode && showTextDialog,
             selectedPoint = selectedPointForText,
@@ -407,12 +319,12 @@ fun DrawingScreen(
             onLoadAudio = { audioPickerLauncher.launch("audio/*") },
             onRecordAudio = {
                 viewModel.closeAudioDialog()
-                // Prüfe Berechtigung
                 audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             },
             onRemoveAudio = { viewModel.removeAudioFromPoint() },
             onDismiss = { viewModel.closeAudioDialog() }
         )
+
         RecorderDialog(
             showDialog = showRecorderDialog,
             isRecording = isRecording,
@@ -443,38 +355,367 @@ fun DrawingScreen(
     }
 }
 
-private fun getFileNameFromUri(context: android.content.Context, uriString: String): String {
-        return try {
-        val uri = Uri.parse(uriString)
-    if (uri.scheme == "content") {
-        var displayName = ""
-        context.contentResolver.query(
-            uri,
-            arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
-            null,
-            null,
-            null
-        )?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val nameIndex =
-                    cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                if (nameIndex != -1) {
-                    displayName = cursor.getString(nameIndex)
+// === MODERNISIERTE TOOLBAR (Web-App Exakt) ===
+@Composable
+fun ModernToolbar(
+    isEditMode: Boolean,
+    showDeepLearningButtons: Boolean,
+    isDeepLearningMode: Boolean,
+    tasksCurrent: Int,
+    tasksTotal: Int,
+    correct: Int,
+    backgroundImageUri: String?,
+    exerciseNameInput: String,
+    pointRadius: Float,
+    viewModel: DrawingViewModel,
+    onExerciseNameClick: () -> Unit,
+    onBackClick: (() -> Unit)? = null,
+    onExportClick: (() -> Unit)? = null,
+    onImportClick: (() -> Unit)? = null
+) {
+    // Haupt-Toolbar
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = HotKlickColors.Light,
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Mode Toggle Buttons
+            Row(
+                modifier = Modifier
+                    .background(HotKlickColors.White, RoundedCornerShape(4.dp))
+                    .border(1.dp, HotKlickColors.Border, RoundedCornerShape(4.dp)),
+                horizontalArrangement = Arrangement.Start
+            ) {
+                // Übungsmodus
+                Button(
+                    onClick = {
+                        viewModel.toggleToPracticeMode()
+                        viewModel.hideDeepLearningButtons()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (!isEditMode && !showDeepLearningButtons)
+                            HotKlickColors.Primary else Color.Transparent,
+                        contentColor = if (!isEditMode && !showDeepLearningButtons)
+                            HotKlickColors.White else HotKlickColors.Dark
+                    ),
+                    shape = RoundedCornerShape(4.dp),
+                    elevation = ButtonDefaults.buttonElevation(0.dp),
+                    modifier = Modifier.height(36.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp)
+                ) {
+                    Text(
+                        text = "Übungsmodus",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal
+                    )
+                }
+
+                // Vertiefungsmodus
+                Button(
+                    onClick = {
+                        viewModel.toggleToPracticeMode()
+                        if (!showDeepLearningButtons) {
+                            viewModel.toggleDeepLearningButtons()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (showDeepLearningButtons || isDeepLearningMode)
+                            HotKlickColors.Primary else Color.Transparent,
+                        contentColor = if (showDeepLearningButtons || isDeepLearningMode)
+                            HotKlickColors.White else HotKlickColors.Dark
+                    ),
+                    shape = RoundedCornerShape(4.dp),
+                    elevation = ButtonDefaults.buttonElevation(0.dp),
+                    modifier = Modifier.height(36.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp)
+                ) {
+                    Text(
+                        text = "Vertiefungsmodus",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal
+                    )
+                }
+
+                // Editiermodus
+                Button(
+                    onClick = {
+                        viewModel.toggleToEditMode()
+                        viewModel.hideDeepLearningButtons()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isEditMode)
+                            HotKlickColors.Success else Color.Transparent,
+                        contentColor = if (isEditMode)
+                            HotKlickColors.White else HotKlickColors.Dark
+                    ),
+                    shape = RoundedCornerShape(4.dp),
+                    elevation = ButtonDefaults.buttonElevation(0.dp),
+                    modifier = Modifier.height(36.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp)
+                ) {
+                    Text(
+                        text = "Editiermodus",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal
+                    )
                 }
             }
+
+            // ← ZURÜCK Button
+            TextButton(
+                onClick = { onBackClick?.invoke() },
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = HotKlickColors.Dark
+                ),
+                modifier = Modifier.height(36.dp),
+                enabled = onBackClick != null
+            ) {
+                Text(
+                    text = "← ZURÜCK",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Normal
+                )
+            }
+
+            // Export/Import Buttons (immer sichtbar)
+            Button(
+                onClick = { onExportClick?.invoke() },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = HotKlickColors.Secondary
+                ),
+                shape = RoundedCornerShape(4.dp),
+                modifier = Modifier.height(36.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp)
+            ) {
+                Text("📦", fontSize = 14.sp)
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "EXPORT",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Button(
+                onClick = { onImportClick?.invoke() },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = HotKlickColors.Primary
+                ),
+                shape = RoundedCornerShape(4.dp),
+                modifier = Modifier.height(36.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp)
+            ) {
+                Text("📥", fontSize = 14.sp)
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "IMPORT",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            // Radius Controls (nur im Editiermodus)
+            if (isEditMode) {
+                Row(
+                    modifier = Modifier
+                        .background(HotKlickColors.White, RoundedCornerShape(4.dp))
+                        .border(1.dp, HotKlickColors.Border, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { viewModel.decreasePointRadius() },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = HotKlickColors.Primary
+                        ),
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Text("−", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+
+                    Text(
+                        text = "${pointRadius.toInt()}px",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.width(45.dp),
+                        textAlign = TextAlign.Center
+                    )
+
+                    IconButton(
+                        onClick = { viewModel.increasePointRadius() },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = HotKlickColors.Primary
+                        ),
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Text("+", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+            }
+
+            // Deepening Controls (nur im Vertiefungsmodus)
+            if (showDeepLearningButtons && !isDeepLearningMode) {
+                Row(
+                    modifier = Modifier
+                        .background(HotKlickColors.White, RoundedCornerShape(4.dp))
+                        .border(1.dp, HotKlickColors.Border, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { viewModel.openTaskCountDialog("text") },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = HotKlickColors.Primary
+                        ),
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Text("📝", fontSize = 14.sp)
+                    }
+
+                    IconButton(
+                        onClick = { viewModel.openTaskCountDialog("audio") },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = HotKlickColors.Primary
+                        ),
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Text("🎤", fontSize = 14.sp)
+                    }
+
+                    IconButton(
+                        onClick = { viewModel.openTaskCountDialog("both") },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = HotKlickColors.Primary
+                        ),
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Text("🎤📝", fontSize = 10.sp)
+                    }
+
+                    IconButton(
+                        onClick = { viewModel.hideDeepLearningButtons() },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = HotKlickColors.Primary
+                        ),
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Text("←", fontSize = 14.sp, color = Color.White)
+                    }
+                }
+            }
+
+            // Deepening Stats (während Aufgaben)
+            if (isDeepLearningMode) {
+                Row(
+                    modifier = Modifier
+                        .background(HotKlickColors.White, RoundedCornerShape(4.dp))
+                        .border(1.dp, HotKlickColors.Border, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Aufg. $tasksCurrent/$tasksTotal",
+                        color = HotKlickColors.Primary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        text = "✅ $correct",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            // Spacer um Platz zu füllen
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Übungsname (wenn Bild geladen)
+            if (backgroundImageUri != null) {
+                OutlinedTextField(
+                    value = exerciseNameInput.ifEmpty { "Übung" },
+                    onValueChange = { viewModel.updateExerciseNameInput(it) },
+                    modifier = Modifier.width(200.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = HotKlickColors.Primary,
+                        unfocusedBorderColor = HotKlickColors.Border,
+                        focusedContainerColor = HotKlickColors.White,
+                        unfocusedContainerColor = HotKlickColors.White
+                    ),
+                    textStyle = LocalTextStyle.current.copy(
+                        fontSize = 14.sp
+                    ),
+                    singleLine = true
+                )
+            }
+
+            // WICHTIG - DATEN SPEICHERN Button
+            Button(
+                onClick = {
+                    viewModel.saveExerciseName()
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = HotKlickColors.Danger
+                ),
+                shape = RoundedCornerShape(4.dp),
+                modifier = Modifier.height(36.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp)
+            ) {
+                Text("⚠️", fontSize = 14.sp)
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "WICHTIG - DATEN SPEICHERN",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
-        if (displayName.isNotEmpty()) {
-            val nameWithoutExtension = displayName.substringBeforeLast(".")
-            return nameWithoutExtension
-        }
-        return "Unbekannte Übung"
-    } else if (uri.scheme == "file") {
-        val path = uri.path ?: ""
-        val fileName = path.substringAfterLast("/")
-        return fileName.substringBeforeLast(".")
-    } else {
-        return ""
     }
+}
+
+// Helper-Funktion (bleibt unverändert)
+private fun getFileNameFromUri(context: android.content.Context, uriString: String): String {
+    return try {
+        val uri = Uri.parse(uriString)
+        if (uri.scheme == "content") {
+            var displayName = ""
+            context.contentResolver.query(
+                uri,
+                arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameIndex =
+                        cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (nameIndex != -1) {
+                        displayName = cursor.getString(nameIndex)
+                    }
+                }
+            }
+            if (displayName.isNotEmpty()) {
+                val nameWithoutExtension = displayName.substringBeforeLast(".")
+                return nameWithoutExtension
+            }
+            return "Unbekannte Übung"
+        } else if (uri.scheme == "file") {
+            val path = uri.path ?: ""
+            val fileName = path.substringAfterLast("/")
+            return fileName.substringBeforeLast(".")
+        } else {
+            return ""
+        }
     } catch (e: Exception) {
         e.printStackTrace()
         return "Fehler"
