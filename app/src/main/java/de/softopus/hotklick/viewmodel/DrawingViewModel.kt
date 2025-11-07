@@ -635,7 +635,7 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             "text" -> currentPoints.filter { it.text != null && it.text.isNotEmpty() }
             "audio" -> currentPoints.filter { it.audioUri != null }
             "both" -> currentPoints.filter {
-                it.text != null && it.text.isNotEmpty() && it.audioUri != null
+                it.text != null && it.text.isNotEmpty() || it.audioUri != null
             }
 
             else -> emptyList()
@@ -674,7 +674,7 @@ class DrawingViewModel(application: Application) : AndroidViewModel(application)
             "both" -> {
                 _selectedHotspotText.value = randomPoint.text ?: ""
                 _currentAudioUri.value = randomPoint.audioUri
-                println("DEBUG: Both-Modus - Text + Audio gesetzt")
+                println("DEBUG Both: Text='${_selectedHotspotText.value}' Audio='${_currentAudioUri.value}'")
             }
         }
     }
